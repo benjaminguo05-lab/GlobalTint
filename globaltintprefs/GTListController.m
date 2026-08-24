@@ -9,6 +9,11 @@ static NSString * const GTPrefsIdentifier = @"com.benja.globaltint";
 static CFStringRef const GTReloadNotification =
     CFSTR("com.benja.globaltint/ReloadPrefs");
 
+@interface GTListController ()
+@property (nonatomic, copy) NSString *gtPendingColorKey;
+@property (nonatomic, copy) NSString *gtPendingColorDefault;
+@end
+
 static UIColor *GTColorFromHexString(NSString *hex) {
     if (![hex isKindOfClass:[NSString class]]) {
         hex = @"#0A84FF";
@@ -43,140 +48,46 @@ static UIColor *GTColorFromHexString(NSString *hex) {
 }
 
 static NSString *GTHexStringFromColor(UIColor *color) {
-    CGFloat r = 0.0, g = 0.0, b = 0.0, a = 0.0;
+    CGFloat r = 0.0;
+    CGFloat g = 0.0;
+    CGFloat b = 0.0;
+    CGFloat a = 0.0;
 
     if (![color getRed:&r green:&g blue:&b alpha:&a]) {
-        // UIColorPickerViewController normally returns an RGB-compatible UIColor.
-        // Fall back to the default accent if conversion unexpectedly fails.
         r = 10.0 / 255.0;
         g = 132.0 / 255.0;
         b = 1.0;
     }
 
-    NSInteger red = (NSInteger)llround(MAX(0.0, MIN(1.0, r)) * 255.0);
-    NSInteger green = (NSInteger)llround(MAX(0.0, MIN(1.0, g)) * 255.0);
-    NSInteger blue = (NSInteger)llround(MAX(0.0, MIN(1.0, b)) * 255.0);
+    NSInteger red =
+        (NSInteger)llround(MAX(0.0, MIN(1.0, r)) * 255.0);
+    NSInteger green =
+        (NSInteger)llround(MAX(0.0, MIN(1.0, g)) * 255.0);
+    NSInteger blue =
+        (NSInteger)llround(MAX(0.0, MIN(1.0, b)) * 255.0);
 
     return [NSString stringWithFormat:@"#%02lX%02lX%02lX",
-            (long)red, (long)green, (long)blue];
+            (long)red,
+            (long)green,
+            (long)blue];
 }
 
 @implementation GTListController
 
-- (PSSpecifier *)switchSpecifierWithName:(NSString *)name
-                                      key:(NSString *)key
-                             defaultValue:(BOOL)defaultValue {
+#pragma mark - Preferences basics
 
-    PSSpecifier *specifier =
-        [PSSpecifier preferenceSpecifierNamed:name
-                                       target:self
-                                          set:@selector(setPreferenceValue:specifier:)
-                                          get:@selector(readPreferenceValue:)
-                                       detail:nil
-                                         cell:PSSwitchCell
-                                         edit:nil];
-
-    [specifier setProperty:key forKey:@"key"];
-    [specifier setProperty:@(defaultValue) forKey:@"default"];
-    return specifier;
+- (HBPreferences *)preferences {
+    return [[HBPreferences alloc] initWithIdentifier:GTPrefsIdentifier];
 }
 
-- (NSMutableArray *)fallbackSpecifiers {
-    NSMutableArray *items = [NSMutableArray array];
-
-    PSSpecifier *mainGroup = [PSSpecifier groupSpecifierWithName:@"Global Tint"];
-    [mainGroup setProperty:
-        @"V0.1.6：修改 UIKit 全局 Tint，并可强制覆盖常见标准控件。"
-        forKey:@"footerText"];
-    [items addObject:mainGroup];
-
-    [items addObject:
-        [self switchSpecifierWithName:@"启用 Global Tint"
-                                  key:@"Enabled"
-                         defaultValue:YES]];
-
-    PSSpecifier *colorValue =
-        [PSSpecifier preferenceSpecifierNamed:@"当前主题色"
-                                       target:self
-                                          set:nil
-                                          get:@selector(accentColorValue:)
-                                       detail:nil
-                                         cell:PSTitleValueCell
-                                         edit:nil];
-    [items addObject:colorValue];
-
-    PSSpecifier *colorButton =
-        [PSSpecifier preferenceSpecifierNamed:@"选择主题颜色"
-                                       target:self
-                                          set:nil
-                                          get:nil
-                                       detail:nil
-                                         cell:PSButtonCell
-                                         edit:nil];
-    colorButton.buttonAction = @selector(chooseAccentColor);
-    [items addObject:colorButton];
-
-    PSSpecifier *scopeGroup = [PSSpecifier groupSpecifierWithName:@"应用范围"];
-    [scopeGroup setProperty:
-        @"“窗口全局 Tint”最稳定，建议保持开启。下面两项用于覆盖 App 自己显式设置的标准 UIKit 控件颜色。"
-        forKey:@"footerText"];
-    [items addObject:scopeGroup];
-
-    [items addObject:
-        [self switchSpecifierWithName:@"窗口全局 Tint"
-                                  key:@"ApplyWindowTint"
-                         defaultValue:YES]];
-
-    [items addObject:
-        [self switchSpecifierWithName:@"强制标准控件"
-                                  key:@"ApplyControls"
-                         defaultValue:YES]];
-
-    [items addObject:
-        [self switchSpecifierWithName:@"强制导航 / Tab Bar"
-                                  key:@"ApplyBars"
-                         defaultValue:YES]];
-
-    PSSpecifier *infoGroup = [PSSpecifier emptyGroupSpecifier];
-    [infoGroup setProperty:
-        @"当前强制控件：UISwitch、UISlider、UIProgressView、UISegmentedControl、UIPageControl、UIRefreshControl；导航类包括 UINavigationBar、UITabBar、UIToolbar、UISearchBar。"
-        forKey:@"footerText"];
-    [items addObject:infoGroup];
-
-    PSSpecifier *reset =
-        [PSSpecifier preferenceSpecifierNamed:@"恢复默认设置"
-                                       target:self
-                                          set:nil
-                                          get:nil
-                                       detail:nil
-                                         cell:PSButtonCell
-                                         edit:nil];
-    reset.buttonAction = @selector(resetPreferences);
-    [items addObject:reset];
-
-    return items;
-}
-
-- (NSArray *)specifiers {
-    if (!_specifiers) {
-        // On some RootHide/iOS 17 setups, the default loader may search the
-        // wrong bundle. Explicitly point PSListController at our preference bundle.
-        NSBundle *bundle = [NSBundle bundleForClass:[self class]];
-
-        NSMutableArray *loaded =
-            [self loadSpecifiersFromPlistName:@"Root"
-                                       target:self
-                                       bundle:bundle];
-
-        if (loaded.count > 0) {
-            _specifiers = loaded;
-        } else {
-            // Do not leave the page blank if plist loading fails.
-            _specifiers = [self fallbackSpecifiers];
-        }
-    }
-
-    return _specifiers;
+- (void)postReloadNotification {
+    CFNotificationCenterPostNotification(
+        CFNotificationCenterGetDarwinNotifyCenter(),
+        GTReloadNotification,
+        NULL,
+        NULL,
+        YES
+    );
 }
 
 - (id)readPreferenceValue:(PSSpecifier *)specifier {
@@ -193,6 +104,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
 - (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
     NSString *key = [specifier propertyForKey:@"key"];
+
     if (key.length == 0) {
         return;
     }
@@ -208,63 +120,610 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [self postReloadNotification];
 }
 
-- (HBPreferences *)preferences {
-    return [[HBPreferences alloc] initWithIdentifier:GTPrefsIdentifier];
+#pragma mark - Specifier builders
+
+- (PSSpecifier *)switchSpecifierWithName:(NSString *)name
+                                     key:(NSString *)key
+                            defaultValue:(BOOL)defaultValue {
+
+    PSSpecifier *specifier =
+        [PSSpecifier preferenceSpecifierNamed:name
+                                       target:self
+                                          set:@selector(setPreferenceValue:specifier:)
+                                          get:@selector(readPreferenceValue:)
+                                       detail:nil
+                                         cell:PSSwitchCell
+                                         edit:nil];
+
+    [specifier setProperty:key forKey:@"key"];
+    [specifier setProperty:@(defaultValue) forKey:@"default"];
+
+    return specifier;
 }
 
-- (void)postReloadNotification {
-    CFNotificationCenterPostNotification(
-        CFNotificationCenterGetDarwinNotifyCenter(),
-        GTReloadNotification,
-        NULL,
-        NULL,
-        YES
-    );
+- (NSString *)storedColorTextForKey:(NSString *)key
+                       defaultValue:(NSString *)defaultValue
+                      allowInherit:(BOOL)allowInherit {
+
+    id value = [[self preferences] objectForKey:key];
+
+    if ([value isKindOfClass:[NSString class]] &&
+        [(NSString *)value length] > 0) {
+        return [(NSString *)value uppercaseString];
+    }
+
+    if (allowInherit) {
+        return @"跟随主色";
+    }
+
+    return defaultValue;
 }
 
-- (id)accentColorValue:(PSSpecifier *)specifier {
-    NSString *value = [[self preferences] objectForKey:@"AccentColor"];
-    return [value isKindOfClass:[NSString class]] ? value : @"#0A84FF";
+- (PSSpecifier *)colorButtonWithName:(NSString *)name
+                                 key:(NSString *)key
+                        defaultValue:(NSString *)defaultValue
+                       allowInherit:(BOOL)allowInherit
+                              action:(SEL)action {
+
+    NSString *value =
+        [self storedColorTextForKey:key
+                       defaultValue:defaultValue
+                      allowInherit:allowInherit];
+
+    PSSpecifier *button =
+        [PSSpecifier preferenceSpecifierNamed:
+            [NSString stringWithFormat:@"%@ · %@", name, value]
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+
+    button.buttonAction = action;
+    return button;
 }
 
-- (void)chooseAccentColor {
+- (NSMutableArray *)buildSpecifiers {
+    NSMutableArray *items = [NSMutableArray array];
+
+    // General
+    PSSpecifier *general =
+        [PSSpecifier groupSpecifierWithName:@"GLOBAL TINT"];
+    [general setProperty:
+        @"V0.2：支持 App 排除、组件独立开关和组件独立颜色。"
+        forKey:@"footerText"];
+    [items addObject:general];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"启用 Global Tint"
+                                  key:@"Enabled"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self colorButtonWithName:@"主主题色"
+                              key:@"AccentColor"
+                     defaultValue:@"#0A84FF"
+                    allowInherit:NO
+                           action:@selector(chooseAccentColor)]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"启用组件独立颜色"
+                                  key:@"UseSeparateColors"
+                         defaultValue:NO]];
+
+    PSSpecifier *colorHelp = [PSSpecifier emptyGroupSpecifier];
+    [colorHelp setProperty:
+        @"关闭“组件独立颜色”时，下面所有组件都会跟随主主题色；开启后，没有单独设置颜色的组件仍会自动跟随主色。"
+        forKey:@"footerText"];
+    [items addObject:colorHelp];
+
+    // Component colors
+    PSSpecifier *controlColors =
+        [PSSpecifier groupSpecifierWithName:@"控件颜色"];
+    [items addObject:controlColors];
+
+    [items addObject:
+        [self colorButtonWithName:@"Window Tint"
+                              key:@"WindowColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseWindowColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"Switch"
+                              key:@"SwitchColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseSwitchColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"Slider"
+                              key:@"SliderColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseSliderColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"Progress"
+                              key:@"ProgressColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseProgressColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"SegmentedControl"
+                              key:@"SegmentedColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseSegmentedColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"PageControl"
+                              key:@"PageControlColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(choosePageControlColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"RefreshControl"
+                              key:@"RefreshControlColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseRefreshControlColor)]];
+
+    PSSpecifier *barColors =
+        [PSSpecifier groupSpecifierWithName:@"导航 / Bar 颜色"];
+    [items addObject:barColors];
+
+    [items addObject:
+        [self colorButtonWithName:@"NavigationBar"
+                              key:@"NavigationBarColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseNavigationBarColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"TabBar"
+                              key:@"TabBarColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseTabBarColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"Toolbar"
+                              key:@"ToolbarColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseToolbarColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"SearchBar"
+                              key:@"SearchBarColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseSearchBarColor)]];
+
+    PSSpecifier *clearColors =
+        [PSSpecifier preferenceSpecifierNamed:@"清除全部组件独立颜色"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    clearColors.buttonAction = @selector(clearComponentColors);
+    [items addObject:clearColors];
+
+    // Component switches
+    PSSpecifier *controlSwitches =
+        [PSSpecifier groupSpecifierWithName:@"控件开关"];
+    [controlSwitches setProperty:
+        @"“标准控件总开关”关闭时，下面所有 UIKit 控件都会停止强制改色。"
+        forKey:@"footerText"];
+    [items addObject:controlSwitches];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"Window 全局 Tint"
+                                  key:@"ApplyWindowTint"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"标准控件总开关"
+                                  key:@"ApplyControls"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UISwitch"
+                                  key:@"ApplySwitch"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UISlider"
+                                  key:@"ApplySlider"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UIProgressView"
+                                  key:@"ApplyProgress"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UISegmentedControl"
+                                  key:@"ApplySegmented"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UIPageControl"
+                                  key:@"ApplyPageControl"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UIRefreshControl"
+                                  key:@"ApplyRefreshControl"
+                         defaultValue:YES]];
+
+    PSSpecifier *barSwitches =
+        [PSSpecifier groupSpecifierWithName:@"导航 / Bar 开关"];
+    [barSwitches setProperty:
+        @"“Bar 总开关”关闭时，下面所有 Navigation / Tab / Toolbar / SearchBar 都会停止强制改色。"
+        forKey:@"footerText"];
+    [items addObject:barSwitches];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"Bar 总开关"
+                                  key:@"ApplyBars"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UINavigationBar"
+                                  key:@"ApplyNavigationBar"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UITabBar"
+                                  key:@"ApplyTabBar"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UIToolbar"
+                                  key:@"ApplyToolbar"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UISearchBar"
+                                  key:@"ApplySearchBar"
+                         defaultValue:YES]];
+
+    // App exclusions
+    PSSpecifier *exclusions =
+        [PSSpecifier groupSpecifierWithName:@"App 排除"];
+    [exclusions setProperty:
+        @"输入要排除的 Bundle ID，多个项目用逗号分隔。例如：com.tencent.xin, com.apple.mobilesafari。仅对已经被 Relaxin / RootHide 注入 tweak 的进程生效。"
+        forKey:@"footerText"];
+    [items addObject:exclusions];
+
+    PSSpecifier *excludedValue =
+        [PSSpecifier preferenceSpecifierNamed:@"当前排除"
+                                       target:self
+                                          set:nil
+                                          get:@selector(excludedBundleSummary:)
+                                       detail:nil
+                                         cell:PSTitleValueCell
+                                         edit:nil];
+    [items addObject:excludedValue];
+
+    PSSpecifier *editExclusions =
+        [PSSpecifier preferenceSpecifierNamed:@"编辑排除 Bundle ID"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    editExclusions.buttonAction = @selector(editExcludedBundleIDs);
+    [items addObject:editExclusions];
+
+    PSSpecifier *clearExclusions =
+        [PSSpecifier preferenceSpecifierNamed:@"清空排除列表"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    clearExclusions.buttonAction = @selector(clearExcludedBundleIDs);
+    [items addObject:clearExclusions];
+
+    // Reset
+    PSSpecifier *resetGroup = [PSSpecifier emptyGroupSpecifier];
+    [resetGroup setProperty:
+        @"V0.2 仍然只处理 UIKit 公共控件。SpringBoard、控制中心、锁屏和 SwiftUI 私有/语义颜色将在后续版本单独处理。"
+        forKey:@"footerText"];
+    [items addObject:resetGroup];
+
+    PSSpecifier *reset =
+        [PSSpecifier preferenceSpecifierNamed:@"恢复全部默认设置"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    reset.buttonAction = @selector(resetPreferences);
+    [items addObject:reset];
+
+    return items;
+}
+
+- (NSArray *)specifiers {
+    if (!_specifiers) {
+        // V0.2 uses code-generated specifiers intentionally.
+        // This avoids the RootHide/iOS 17 Root.plist loading issue seen in V0.1.x.
+        _specifiers = [self buildSpecifiers];
+    }
+
+    return _specifiers;
+}
+
+#pragma mark - Color picker
+
+- (void)presentColorPickerForKey:(NSString *)key
+                    defaultValue:(NSString *)defaultValue
+                           title:(NSString *)title {
+
     if (@available(iOS 14.0, *)) {
+        self.gtPendingColorKey = key;
+        self.gtPendingColorDefault = defaultValue;
+
+        HBPreferences *preferences = [self preferences];
+        NSString *stored = [preferences objectForKey:key];
+
+        NSString *hex = nil;
+
+        if ([stored isKindOfClass:[NSString class]] &&
+            stored.length > 0) {
+            hex = stored;
+        } else if (defaultValue.length > 0) {
+            hex = defaultValue;
+        } else {
+            NSString *accent = [preferences objectForKey:@"AccentColor"];
+            hex =
+                ([accent isKindOfClass:[NSString class]] && accent.length > 0)
+                ? accent
+                : @"#0A84FF";
+        }
+
         UIColorPickerViewController *picker =
             [[UIColorPickerViewController alloc] init];
 
         picker.delegate = self;
         picker.supportsAlpha = NO;
-
-        NSString *hex = [[self preferences] objectForKey:@"AccentColor"];
-        picker.selectedColor =
-            GTColorFromHexString([hex isKindOfClass:[NSString class]]
-                                 ? hex
-                                 : @"#0A84FF");
+        picker.title = title;
+        picker.selectedColor = GTColorFromHexString(hex);
 
         [self presentViewController:picker animated:YES completion:nil];
     }
 }
 
+- (void)chooseAccentColor {
+    [self presentColorPickerForKey:@"AccentColor"
+                      defaultValue:@"#0A84FF"
+                             title:@"主主题色"];
+}
+
+- (void)chooseWindowColor {
+    [self presentColorPickerForKey:@"WindowColor"
+                      defaultValue:@""
+                             title:@"Window Tint"];
+}
+
+- (void)chooseSwitchColor {
+    [self presentColorPickerForKey:@"SwitchColor"
+                      defaultValue:@""
+                             title:@"Switch"];
+}
+
+- (void)chooseSliderColor {
+    [self presentColorPickerForKey:@"SliderColor"
+                      defaultValue:@""
+                             title:@"Slider"];
+}
+
+- (void)chooseProgressColor {
+    [self presentColorPickerForKey:@"ProgressColor"
+                      defaultValue:@""
+                             title:@"Progress"];
+}
+
+- (void)chooseSegmentedColor {
+    [self presentColorPickerForKey:@"SegmentedColor"
+                      defaultValue:@""
+                             title:@"SegmentedControl"];
+}
+
+- (void)choosePageControlColor {
+    [self presentColorPickerForKey:@"PageControlColor"
+                      defaultValue:@""
+                             title:@"PageControl"];
+}
+
+- (void)chooseRefreshControlColor {
+    [self presentColorPickerForKey:@"RefreshControlColor"
+                      defaultValue:@""
+                             title:@"RefreshControl"];
+}
+
+- (void)chooseNavigationBarColor {
+    [self presentColorPickerForKey:@"NavigationBarColor"
+                      defaultValue:@""
+                             title:@"NavigationBar"];
+}
+
+- (void)chooseTabBarColor {
+    [self presentColorPickerForKey:@"TabBarColor"
+                      defaultValue:@""
+                             title:@"TabBar"];
+}
+
+- (void)chooseToolbarColor {
+    [self presentColorPickerForKey:@"ToolbarColor"
+                      defaultValue:@""
+                             title:@"Toolbar"];
+}
+
+- (void)chooseSearchBarColor {
+    [self presentColorPickerForKey:@"SearchBarColor"
+                      defaultValue:@""
+                             title:@"SearchBar"];
+}
+
 - (void)colorPickerViewControllerDidSelectColor:
     (UIColorPickerViewController *)viewController API_AVAILABLE(ios(14.0)) {
+
+    if (self.gtPendingColorKey.length == 0) {
+        return;
+    }
 
     NSString *hex = GTHexStringFromColor(viewController.selectedColor);
 
     HBPreferences *preferences = [self preferences];
-    [preferences setObject:hex forKey:@"AccentColor"];
+    [preferences setObject:hex forKey:self.gtPendingColorKey];
     [self postReloadNotification];
 }
 
 - (void)colorPickerViewControllerDidFinish:
     (UIColorPickerViewController *)viewController API_AVAILABLE(ios(14.0)) {
 
+    self.gtPendingColorKey = nil;
+    self.gtPendingColorDefault = nil;
+
     [self reloadSpecifiers];
 }
+
+#pragma mark - Color management
+
+- (void)clearComponentColors {
+    NSArray<NSString *> *keys = @[
+        @"WindowColor",
+        @"SwitchColor",
+        @"SliderColor",
+        @"ProgressColor",
+        @"SegmentedColor",
+        @"PageControlColor",
+        @"RefreshControlColor",
+        @"NavigationBarColor",
+        @"TabBarColor",
+        @"ToolbarColor",
+        @"SearchBarColor"
+    ];
+
+    HBPreferences *preferences = [self preferences];
+
+    for (NSString *key in keys) {
+        [preferences removeObjectForKey:key];
+    }
+
+    [self postReloadNotification];
+    [self reloadSpecifiers];
+}
+
+#pragma mark - App exclusions
+
+- (id)excludedBundleSummary:(PSSpecifier *)specifier {
+    NSString *value =
+        [[self preferences] objectForKey:@"ExcludedBundleIDs"];
+
+    if (![value isKindOfClass:[NSString class]] ||
+        value.length == 0) {
+        return @"未设置";
+    }
+
+    NSCharacterSet *separators =
+        [NSCharacterSet characterSetWithCharactersInString:@",;\n\r\t "];
+
+    NSArray<NSString *> *parts =
+        [value componentsSeparatedByCharactersInSet:separators];
+
+    NSInteger count = 0;
+
+    for (NSString *part in parts) {
+        NSString *clean =
+            [part stringByTrimmingCharactersInSet:
+             [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+        if (clean.length > 0) {
+            count++;
+        }
+    }
+
+    return [NSString stringWithFormat:@"%ld 个", (long)count];
+}
+
+- (void)editExcludedBundleIDs {
+    HBPreferences *preferences = [self preferences];
+
+    NSString *existing =
+        [preferences objectForKey:@"ExcludedBundleIDs"];
+
+    if (![existing isKindOfClass:[NSString class]]) {
+        existing = @"";
+    }
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"排除 App"
+                                            message:@"输入 Bundle ID，多个项目用逗号分隔。"
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
+        textField.text = existing;
+        textField.placeholder =
+            @"com.tencent.xin, com.apple.mobilesafari";
+        textField.autocorrectionType = UITextAutocorrectionTypeNo;
+        textField.autocapitalizationType =
+            UITextAutocapitalizationTypeNone;
+        textField.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    __weak typeof(self) weakSelf = self;
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"保存"
+                                 style:UIAlertActionStyleDefault
+                               handler:^(__unused UIAlertAction *action) {
+
+        NSString *value =
+            alert.textFields.firstObject.text ?: @"";
+
+        HBPreferences *prefs = [weakSelf preferences];
+        [prefs setObject:value forKey:@"ExcludedBundleIDs"];
+
+        [weakSelf postReloadNotification];
+        [weakSelf reloadSpecifiers];
+    }]];
+
+    [self presentViewController:alert animated:YES completion:nil];
+}
+
+- (void)clearExcludedBundleIDs {
+    HBPreferences *preferences = [self preferences];
+    [preferences removeObjectForKey:@"ExcludedBundleIDs"];
+
+    [self postReloadNotification];
+    [self reloadSpecifiers];
+}
+
+#pragma mark - Reset
 
 - (void)resetPreferences {
     UIAlertController *alert =
         [UIAlertController alertControllerWithTitle:@"恢复默认设置"
-                                            message:@"将主题色和所有开关恢复为默认值。"
+                                            message:@"将主色、组件颜色、组件开关以及 App 排除列表全部恢复为默认值。"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addAction:
@@ -278,8 +737,10 @@ static NSString *GTHexStringFromColor(UIColor *color) {
         [UIAlertAction actionWithTitle:@"恢复"
                                  style:UIAlertActionStyleDestructive
                                handler:^(__unused UIAlertAction *action) {
+
         HBPreferences *preferences = [weakSelf preferences];
         [preferences removeAllObjects];
+
         [weakSelf postReloadNotification];
         [weakSelf reloadSpecifiers];
     }]];
