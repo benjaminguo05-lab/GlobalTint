@@ -9,6 +9,9 @@ on:
     paths-ignore:
       - "README.md"
 
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-14
@@ -19,11 +22,62 @@ jobs:
 
       - name: Install RootHide Theos
         shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
         run: |
           set -e
           export THEOS="$HOME/theos"
-          bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
+
+          # RootHide's install-sdk script queries api.github.com.
+          # Pass the Actions token and retry transient GitHub/API failures.
+          success=0
+          for attempt in 1 2 3; do
+            echo "RootHide Theos install attempt: $attempt/3"
+
+            if bash -c "$(curl --retry 3 --retry-delay 3 -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"; then
+              success=1
+              break
+            fi
+
+            echo "Install attempt $attempt failed."
+            if [ "$attempt" -lt 3 ]; then
+              echo "Waiting 15 seconds before retry..."
+              sleep 15
+            fi
+          done
+
+          if [ "$success" -ne 1 ]; then
+            echo "::error::RootHide Theos installation failed after 3 attempts."
+            exit 1
+          fi
+
           echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+
+      - name: Ensure iPhoneOS SDK exists
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -e
+
+          if ! find "$THEOS/sdks" -maxdepth 1 -type d -name "iPhoneOS*.sdk" | grep -q .; then
+            echo "No iPhoneOS SDK found; retrying SDK installation directly..."
+            for attempt in 1 2 3; do
+              if "$THEOS/bin/install-sdk" latest; then
+                break
+              fi
+
+              if [ "$attempt" -eq 3 ]; then
+                echo "::error::Failed to install iPhoneOS SDK after 3 attempts."
+                exit 1
+              fi
+
+              sleep 15
+            done
+          fi
+
+          echo "Installed SDKs:"
+          find "$THEOS/sdks" -maxdepth 1 -type d -name "*.sdk" -print
 
       - name: Show build environment
         shell: bash
