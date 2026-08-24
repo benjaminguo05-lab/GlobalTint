@@ -207,6 +207,42 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                     allowInherit:NO
                            action:@selector(chooseAccentColor)]];
 
+
+    PSSpecifier *compatGroup =
+        [PSSpecifier groupSpecifierWithName:@"兼容模式"];
+    [compatGroup setProperty:
+        @"用于 App Store、Safari 等不完全跟随普通 UIKit tint 的系统 App。建议默认关闭，需要时逐项开启。"
+        forKey:@"footerText"];
+    [items addObject:compatGroup];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"替换 System Blue"
+                                  key:@"ReplaceSystemBlue"
+                         defaultValue:NO]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"替换 Link Color"
+                                  key:@"ReplaceLinkColor"
+                         defaultValue:NO]];
+
+    [items addObject:
+        [self colorButtonWithName:@"语义蓝兼容色"
+                              key:@"SemanticBlueColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseSemanticBlueColor)]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"显示注入测试边框"
+                                  key:@"DebugInjectionBorder"
+                         defaultValue:NO]];
+
+    PSSpecifier *debugHelp = [PSSpecifier emptyGroupSpecifier];
+    [debugHelp setProperty:
+        @"开启“注入测试边框”后，成功加载 GlobalTint 的 App 窗口四周会出现 3pt 主题色边框。测试完请关闭。"
+        forKey:@"footerText"];
+    [items addObject:debugHelp];
+
     [items addObject:
         [self switchSpecifierWithName:@"启用组件独立颜色"
                                   key:@"UseSeparateColors"
