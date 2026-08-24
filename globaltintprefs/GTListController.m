@@ -63,12 +63,149 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
 @implementation GTListController
 
+- (PSSpecifier *)switchSpecifierWithName:(NSString *)name
+                                      key:(NSString *)key
+                             defaultValue:(BOOL)defaultValue {
+
+    PSSpecifier *specifier =
+        [PSSpecifier preferenceSpecifierNamed:name
+                                       target:self
+                                          set:@selector(setPreferenceValue:specifier:)
+                                          get:@selector(readPreferenceValue:)
+                                       detail:nil
+                                         cell:PSSwitchCell
+                                         edit:nil];
+
+    [specifier setProperty:key forKey:@"key"];
+    [specifier setProperty:@(defaultValue) forKey:@"default"];
+    return specifier;
+}
+
+- (NSMutableArray *)fallbackSpecifiers {
+    NSMutableArray *items = [NSMutableArray array];
+
+    PSSpecifier *mainGroup = [PSSpecifier groupSpecifierWithName:@"Global Tint"];
+    [mainGroup setProperty:
+        @"V0.1.6：修改 UIKit 全局 Tint，并可强制覆盖常见标准控件。"
+        forKey:@"footerText"];
+    [items addObject:mainGroup];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"启用 Global Tint"
+                                  key:@"Enabled"
+                         defaultValue:YES]];
+
+    PSSpecifier *colorValue =
+        [PSSpecifier preferenceSpecifierNamed:@"当前主题色"
+                                       target:self
+                                          set:nil
+                                          get:@selector(accentColorValue:)
+                                       detail:nil
+                                         cell:PSTitleValueCell
+                                         edit:nil];
+    [items addObject:colorValue];
+
+    PSSpecifier *colorButton =
+        [PSSpecifier preferenceSpecifierNamed:@"选择主题颜色"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    colorButton.buttonAction = @selector(chooseAccentColor);
+    [items addObject:colorButton];
+
+    PSSpecifier *scopeGroup = [PSSpecifier groupSpecifierWithName:@"应用范围"];
+    [scopeGroup setProperty:
+        @"“窗口全局 Tint”最稳定，建议保持开启。下面两项用于覆盖 App 自己显式设置的标准 UIKit 控件颜色。"
+        forKey:@"footerText"];
+    [items addObject:scopeGroup];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"窗口全局 Tint"
+                                  key:@"ApplyWindowTint"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"强制标准控件"
+                                  key:@"ApplyControls"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"强制导航 / Tab Bar"
+                                  key:@"ApplyBars"
+                         defaultValue:YES]];
+
+    PSSpecifier *infoGroup = [PSSpecifier emptyGroupSpecifier];
+    [infoGroup setProperty:
+        @"当前强制控件：UISwitch、UISlider、UIProgressView、UISegmentedControl、UIPageControl、UIRefreshControl；导航类包括 UINavigationBar、UITabBar、UIToolbar、UISearchBar。"
+        forKey:@"footerText"];
+    [items addObject:infoGroup];
+
+    PSSpecifier *reset =
+        [PSSpecifier preferenceSpecifierNamed:@"恢复默认设置"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    reset.buttonAction = @selector(resetPreferences);
+    [items addObject:reset];
+
+    return items;
+}
+
 - (NSArray *)specifiers {
     if (!_specifiers) {
-        _specifiers =
-            [self loadSpecifiersFromPlistName:@"Root" target:self];
+        // On some RootHide/iOS 17 setups, the default loader may search the
+        // wrong bundle. Explicitly point PSListController at our preference bundle.
+        NSBundle *bundle = [NSBundle bundleForClass:[self class]];
+
+        NSMutableArray *loaded =
+            [self loadSpecifiersFromPlistName:@"Root"
+                                       target:self
+                                       bundle:bundle];
+
+        if (loaded.count > 0) {
+            _specifiers = loaded;
+        } else {
+            // Do not leave the page blank if plist loading fails.
+            _specifiers = [self fallbackSpecifiers];
+        }
     }
+
     return _specifiers;
+}
+
+- (id)readPreferenceValue:(PSSpecifier *)specifier {
+    NSString *key = [specifier propertyForKey:@"key"];
+    id defaultValue = [specifier propertyForKey:@"default"];
+
+    if (key.length == 0) {
+        return defaultValue;
+    }
+
+    id value = [[self preferences] objectForKey:key];
+    return value ?: defaultValue;
+}
+
+- (void)setPreferenceValue:(id)value specifier:(PSSpecifier *)specifier {
+    NSString *key = [specifier propertyForKey:@"key"];
+    if (key.length == 0) {
+        return;
+    }
+
+    HBPreferences *preferences = [self preferences];
+
+    if (value) {
+        [preferences setObject:value forKey:key];
+    } else {
+        [preferences removeObjectForKey:key];
+    }
+
+    [self postReloadNotification];
 }
 
 - (HBPreferences *)preferences {
