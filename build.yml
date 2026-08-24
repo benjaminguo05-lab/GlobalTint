@@ -1,0 +1,50 @@
+name: Build GlobalTint
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+    paths-ignore:
+      - "README.md"
+
+jobs:
+  build:
+    runs-on: macos-14
+
+    steps:
+      - name: Checkout project
+        uses: actions/checkout@v5
+
+      - name: Install RootHide Theos
+        shell: bash
+        run: |
+          set -e
+          export THEOS="$HOME/theos"
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
+          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+
+      - name: Show build environment
+        shell: bash
+        run: |
+          xcodebuild -version
+          clang --version
+          echo "THEOS=$THEOS"
+          ls "$THEOS"
+
+      - name: Build RootHide package
+        shell: bash
+        run: |
+          set -e
+          make clean
+          make package FINALPACKAGE=1
+          echo "---- packages ----"
+          find packages -maxdepth 1 -type f -name "*.deb" -print
+
+      - name: Upload DEB
+        uses: actions/upload-artifact@v4
+        with:
+          name: GlobalTint-RootHide
+          path: packages/*.deb
+          if-no-files-found: error
