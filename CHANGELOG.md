@@ -1,5 +1,15 @@
 # GlobalTint Changelog
 
+## 0.2.4
+
+- Injection test confirmed App Store and Safari load GlobalTint correctly.
+- Added `强制替换已解析蓝色` compatibility mode.
+- Intercepts blue values at `UIView.setTintColor:` and `UILabel.setTextColor:`.
+- Intercepts blue results from `UIColor.resolvedColorWithTraitCollection:`.
+- Preserves the source alpha while replacing blue with the configured semantic compatibility color.
+- Re-applies compatibility coloring to already-existing view hierarchies during preference refresh.
+- Attempts to restore remembered tint/text colors when compatibility mode is disabled.
+
 ## 0.2.3
 
 - Fixed the `语义蓝兼容色` button doing nothing.

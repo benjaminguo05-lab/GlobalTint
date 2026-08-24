@@ -42,6 +42,7 @@ static BOOL GTUseSeparateColors = NO;
 static BOOL GTReplaceSystemBlue = NO;
 static BOOL GTReplaceLinkColor = NO;
 static BOOL GTDebugInjectionBorder = NO;
+static BOOL GTForceResolvedBlue = NO;
 static NSString *GTSemanticBlueHex = @"";
 
 // Preferences strings
@@ -80,6 +81,8 @@ static char GTOriginalTabItemScrollEdgeAppearanceKey;
 static char GTApplyingTabAppearanceKey;
 static char GTOriginalWindowBorderWidthKey;
 static char GTOriginalWindowBorderColorKey;
+static char GTOriginalResolvedTintKey;
+static char GTOriginalResolvedTextColorKey;
 
 #pragma mark - Color helpers
 
@@ -155,6 +158,100 @@ static UIColor *GTSemanticBlueColor(void) {
     }
 
     return GTColorFromHexOrNil(GTSemanticBlueHex) ?: GTAccentColor;
+}
+
+
+static BOOL GTExtractRGBA(UIColor *color,
+                          CGFloat *red,
+                          CGFloat *green,
+                          CGFloat *blue,
+                          CGFloat *alpha) {
+    if (!color) {
+        return NO;
+    }
+
+    CGFloat r = 0.0;
+    CGFloat g = 0.0;
+    CGFloat b = 0.0;
+    CGFloat a = 0.0;
+
+    if ([color getRed:&r green:&g blue:&b alpha:&a]) {
+        if (red) *red = r;
+        if (green) *green = g;
+        if (blue) *blue = b;
+        if (alpha) *alpha = a;
+        return YES;
+    }
+
+    CGFloat white = 0.0;
+
+    if ([color getWhite:&white alpha:&a]) {
+        if (red) *red = white;
+        if (green) *green = white;
+        if (blue) *blue = white;
+        if (alpha) *alpha = a;
+        return YES;
+    }
+
+    return NO;
+}
+
+// Conservative detector for Apple's common light/dark system blue family.
+// #007AFF and #0A84FF both match. Brand blues that are far away do not.
+static BOOL GTLooksLikeResolvedSystemBlue(UIColor *color) {
+    CGFloat r = 0.0;
+    CGFloat g = 0.0;
+    CGFloat b = 0.0;
+    CGFloat a = 0.0;
+
+    if (!GTExtractRGBA(color, &r, &g, &b, &a)) {
+        return NO;
+    }
+
+    if (a <= 0.01) {
+        return NO;
+    }
+
+    BOOL blueDominant =
+        b >= 0.82 &&
+        r <= 0.20 &&
+        g >= 0.32 &&
+        g <= 0.64 &&
+        (b - r) >= 0.62 &&
+        (b - g) >= 0.25;
+
+    return blueDominant;
+}
+
+static UIColor *GTReplacementPreservingAlpha(UIColor *source) {
+    UIColor *replacement = GTSemanticBlueColor();
+
+    CGFloat sourceAlpha = 1.0;
+    CGFloat rr = 0.0;
+    CGFloat rg = 0.0;
+    CGFloat rb = 0.0;
+    CGFloat ra = 1.0;
+
+    GTExtractRGBA(source, NULL, NULL, NULL, &sourceAlpha);
+
+    if (!GTExtractRGBA(replacement, &rr, &rg, &rb, &ra)) {
+        return replacement;
+    }
+
+    return [UIColor colorWithRed:rr
+                           green:rg
+                            blue:rb
+                           alpha:(sourceAlpha * ra)];
+}
+
+static UIColor *GTMaybeReplaceResolvedBlue(UIColor *color) {
+    if (!GTShouldApplyBase() ||
+        !GTForceResolvedBlue ||
+        !GTLooksLikeResolvedSystemBlue(color)) {
+        return color;
+    }
+
+    return GTReplacementPreservingAlpha(color);
 }
 
 static void GTRunOnMain(dispatch_block_t block) {
@@ -770,10 +867,98 @@ static void GTApplySearchBar(UISearchBar *bar) {
                          GTColorForComponentHex(GTSearchBarHex));
 }
 
+static void GTApplyResolvedBlueCompatibilityToView(UIView *view) {
+    if (!view) {
+        return;
+    }
+
+    BOOL active =
+        GTShouldApplyBase() &&
+        GTForceResolvedBlue;
+
+    if (active) {
+        UIColor *currentTint = view.tintColor;
+
+        if (GTLooksLikeResolvedSystemBlue(currentTint)) {
+            if (!objc_getAssociatedObject(view, &GTOriginalResolvedTintKey)) {
+                objc_setAssociatedObject(
+                    view,
+                    &GTOriginalResolvedTintKey,
+                    currentTint ?: (id)[NSNull null],
+                    OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                );
+            }
+
+            view.tintColor = GTReplacementPreservingAlpha(currentTint);
+        }
+
+        if ([view isKindOfClass:[UILabel class]]) {
+            UILabel *label = (UILabel *)view;
+            UIColor *textColor = label.textColor;
+
+            if (GTLooksLikeResolvedSystemBlue(textColor)) {
+                if (!objc_getAssociatedObject(label,
+                                              &GTOriginalResolvedTextColorKey)) {
+                    objc_setAssociatedObject(
+                        label,
+                        &GTOriginalResolvedTextColorKey,
+                        textColor ?: (id)[NSNull null],
+                        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                    );
+                }
+
+                label.textColor =
+                    GTReplacementPreservingAlpha(textColor);
+            }
+        }
+    } else {
+        id tint =
+            objc_getAssociatedObject(view, &GTOriginalResolvedTintKey);
+
+        if (tint) {
+            view.tintColor =
+                tint == [NSNull null] ? nil : (UIColor *)tint;
+
+            objc_setAssociatedObject(
+                view,
+                &GTOriginalResolvedTintKey,
+                nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+
+        if ([view isKindOfClass:[UILabel class]]) {
+            UILabel *label = (UILabel *)view;
+
+            id textColor =
+                objc_getAssociatedObject(label,
+                                         &GTOriginalResolvedTextColorKey);
+
+            if (textColor) {
+                label.textColor =
+                    textColor == [NSNull null]
+                    ? nil
+                    : (UIColor *)textColor;
+
+                objc_setAssociatedObject(
+                    label,
+                    &GTOriginalResolvedTextColorKey,
+                    nil,
+                    OBJC_ASSOCIATION_RETAIN_NONATOMIC
+                );
+            }
+        }
+    }
+}
+
 static void GTApplyManagedPropertiesToView(UIView *view) {
     if (!view) {
         return;
     }
+
+    // V0.2.4 catches blue colors that have already been resolved to concrete
+    // UIColor values by SwiftUI/private system UI.
+    GTApplyResolvedBlueCompatibilityToView(view);
 
     if ([view isKindOfClass:[UIWindow class]]) {
         GTApplyWindow((UIWindow *)view);
@@ -837,6 +1022,82 @@ static void GTRefreshKnownWindows(void) {
     });
 }
 
+#pragma mark - Resolved color compatibility
+
+%hook UIView
+
+- (void)setTintColor:(UIColor *)tintColor {
+    UIColor *incoming = tintColor;
+
+    if (GTShouldApplyBase() &&
+        GTForceResolvedBlue &&
+        GTLooksLikeResolvedSystemBlue(incoming)) {
+
+        if (!objc_getAssociatedObject(self, &GTOriginalResolvedTintKey)) {
+            objc_setAssociatedObject(
+                self,
+                &GTOriginalResolvedTintKey,
+                incoming ?: (id)[NSNull null],
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+
+        incoming = GTReplacementPreservingAlpha(incoming);
+    } else if (GTForceResolvedBlue &&
+               incoming &&
+               !GTLooksLikeResolvedSystemBlue(incoming)) {
+
+        // The host app deliberately changed to a non-system-blue color.
+        objc_setAssociatedObject(
+            self,
+            &GTOriginalResolvedTintKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    %orig(incoming);
+}
+
+%end
+
+%hook UILabel
+
+- (void)setTextColor:(UIColor *)textColor {
+    UIColor *incoming = textColor;
+
+    if (GTShouldApplyBase() &&
+        GTForceResolvedBlue &&
+        GTLooksLikeResolvedSystemBlue(incoming)) {
+
+        if (!objc_getAssociatedObject(self,
+                                      &GTOriginalResolvedTextColorKey)) {
+            objc_setAssociatedObject(
+                self,
+                &GTOriginalResolvedTextColorKey,
+                incoming ?: (id)[NSNull null],
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+
+        incoming = GTReplacementPreservingAlpha(incoming);
+    } else if (GTForceResolvedBlue &&
+               incoming &&
+               !GTLooksLikeResolvedSystemBlue(incoming)) {
+
+        objc_setAssociatedObject(
+            self,
+            &GTOriginalResolvedTextColorKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    %orig(incoming);
+}
+
+%end
+
 #pragma mark - Semantic UIKit colors
 
 %hook UIColor
@@ -855,6 +1116,18 @@ static void GTRefreshKnownWindows(void) {
     }
 
     return %orig;
+}
+
+- (UIColor *)resolvedColorWithTraitCollection:(UITraitCollection *)traitCollection {
+    UIColor *resolved = %orig(traitCollection);
+
+    if (GTShouldApplyBase() &&
+        GTForceResolvedBlue &&
+        GTLooksLikeResolvedSystemBlue(resolved)) {
+        return GTReplacementPreservingAlpha(resolved);
+    }
+
+    return resolved;
 }
 
 %end
@@ -1120,6 +1393,11 @@ static void GTRegisterPreferences(void) {
     [GTPreferences registerBool:&GTDebugInjectionBorder
                          default:NO
                           forKey:@"DebugInjectionBorder"];
+
+
+    [GTPreferences registerBool:&GTForceResolvedBlue
+                         default:NO
+                          forKey:@"ForceResolvedBlue"];
 
     [GTPreferences registerBool:&GTEnableSwitch
                          default:YES
