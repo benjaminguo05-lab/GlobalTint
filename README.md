@@ -201,3 +201,46 @@ Every push to `main` or `master` also triggers a build automatically.
 
 If the workflow fails, copy the complete output of the red **Build RootHide package**
 step and send it back for diagnosis.
+
+
+## V0.2
+
+V0.2 adds three major features:
+
+### 1. App exclusions
+
+In Settings -> Global Tint -> App 排除, enter bundle identifiers separated by commas.
+
+Examples:
+
+```text
+com.tencent.xin, com.apple.mobilesafari
+```
+
+When the current process bundle identifier is in this list, GlobalTint restores any
+remembered colors it changed and stops applying its UIKit tint rules in that process.
+
+This exclusion is separate from RootHide's App List: the app still needs tweak injection
+enabled before GlobalTint can run there at all.
+
+### 2. Per-component enable switches
+
+V0.2 has independent switches for Window Tint, Switch, Slider, ProgressView,
+SegmentedControl, PageControl, RefreshControl, NavigationBar, TabBar, Toolbar and
+SearchBar.
+
+`ApplyControls` and `ApplyBars` remain as master switches for compatibility with V0.1.x.
+
+### 3. Per-component colors
+
+Keep `启用组件独立颜色` off to make every component follow the main accent color.
+
+Turn it on to use individual component colors. A component whose individual color has
+not been set still follows the main accent color.
+
+Use `清除全部组件独立颜色` to return every component to main-color inheritance.
+
+### Upgrade
+
+V0.2 can be installed over V0.1.6. Existing `Enabled`, `AccentColor`,
+`ApplyWindowTint`, `ApplyControls`, and `ApplyBars` preferences are retained.
