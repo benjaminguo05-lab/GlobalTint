@@ -2,118 +2,13 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <array>
-
-    <dict>
-        <key>cell</key>
-        <string>PSGroupCell</string>
-        <key>label</key>
-        <string>Global Tint</string>
-        <key>footerText</key>
-        <string>V0.1：修改 UIKit 全局 Tint，并可强制覆盖常见标准控件。第三方 App 需要在 Relaxin / RootHide 的 App List 中允许 tweak 注入。</string>
-    </dict>
-
-    <dict>
-        <key>cell</key>
-        <string>PSSwitchCell</string>
-        <key>defaults</key>
-        <string>com.benja.globaltint</string>
-        <key>key</key>
-        <string>Enabled</string>
-        <key>default</key>
-        <true/>
-        <key>label</key>
-        <string>启用 Global Tint</string>
-        <key>PostNotification</key>
-        <string>com.benja.globaltint/ReloadPrefs</string>
-    </dict>
-
-    <dict>
-        <key>cell</key>
-        <string>PSTitleValueCell</string>
-        <key>label</key>
-        <string>当前主题色</string>
-        <key>get</key>
-        <string>accentColorValue:</string>
-    </dict>
-
-    <dict>
-        <key>cell</key>
-        <string>PSButtonCell</string>
-        <key>label</key>
-        <string>选择主题颜色</string>
-        <key>action</key>
-        <string>chooseAccentColor</string>
-    </dict>
-
-    <dict>
-        <key>cell</key>
-        <string>PSGroupCell</string>
-        <key>label</key>
-        <string>应用范围</string>
-        <key>footerText</key>
-        <string>“窗口全局 Tint”最稳定，建议保持开启。下面两项用于覆盖 App 自己显式设置的标准 UIKit 控件颜色。</string>
-    </dict>
-
-    <dict>
-        <key>cell</key>
-        <string>PSSwitchCell</string>
-        <key>defaults</key>
-        <string>com.benja.globaltint</string>
-        <key>key</key>
-        <string>ApplyWindowTint</string>
-        <key>default</key>
-        <true/>
-        <key>label</key>
-        <string>窗口全局 Tint</string>
-        <key>PostNotification</key>
-        <string>com.benja.globaltint/ReloadPrefs</string>
-    </dict>
-
-    <dict>
-        <key>cell</key>
-        <string>PSSwitchCell</string>
-        <key>defaults</key>
-        <string>com.benja.globaltint</string>
-        <key>key</key>
-        <string>ApplyControls</string>
-        <key>default</key>
-        <true/>
-        <key>label</key>
-        <string>强制标准控件</string>
-        <key>PostNotification</key>
-        <string>com.benja.globaltint/ReloadPrefs</string>
-    </dict>
-
-    <dict>
-        <key>cell</key>
-        <string>PSSwitchCell</string>
-        <key>defaults</key>
-        <string>com.benja.globaltint</string>
-        <key>key</key>
-        <string>ApplyBars</string>
-        <key>default</key>
-        <true/>
-        <key>label</key>
-        <string>强制导航 / Tab Bar</string>
-        <key>PostNotification</key>
-        <string>com.benja.globaltint/ReloadPrefs</string>
-    </dict>
-
-    <dict>
-        <key>cell</key>
-        <string>PSGroupCell</string>
-        <key>footerText</key>
-        <string>当前强制控件：UISwitch、UISlider、UIProgressView、UISegmentedControl、UIPageControl、UIRefreshControl；导航类包括 UINavigationBar、UITabBar、UIToolbar、UISearchBar。</string>
-    </dict>
-
-    <dict>
-        <key>cell</key>
-        <string>PSButtonCell</string>
-        <key>label</key>
-        <string>恢复默认设置</string>
-        <key>action</key>
-        <string>resetPreferences</string>
-    </dict>
-
+	<dict>
+		<key>cell</key>
+		<string>PSGroupCell</string>
+		<key>label</key>
+		<string>Global Tint</string>
+		<key>footerText</key>
+		<string>Global Tint V0.2 使用代码生成设置项；此 plist 仅作为兼容资源保留。</string>
+	</dict>
 </array>
 </plist>

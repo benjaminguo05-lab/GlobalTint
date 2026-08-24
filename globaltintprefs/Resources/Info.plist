@@ -13,9 +13,9 @@
 	<key>CFBundlePackageType</key>
 	<string>BNDL</string>
 	<key>CFBundleShortVersionString</key>
-	<string>0.1.6</string>
+	<string>0.2.0</string>
 	<key>CFBundleVersion</key>
-	<string>6</string>
+	<string>20</string>
 	<key>CFBundleExecutable</key>
 	<string>GlobalTintPrefs</string>
 	<key>CFBundleDisplayName</key>
