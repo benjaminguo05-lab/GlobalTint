@@ -548,6 +548,12 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                              title:@"主主题色"];
 }
 
+- (void)chooseSemanticBlueColor {
+    [self presentColorPickerForKey:@"SemanticBlueColor"
+                      defaultValue:@""
+                             title:@"语义蓝兼容色"];
+}
+
 - (void)chooseWindowColor {
     [self presentColorPickerForKey:@"WindowColor"
                       defaultValue:@""
