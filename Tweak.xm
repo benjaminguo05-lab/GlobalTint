@@ -84,6 +84,8 @@ static char GTOriginalWindowBorderColorKey;
 static char GTOriginalResolvedTintKey;
 static char GTOriginalResolvedTextColorKey;
 
+static BOOL GTShouldApplyBase(void);
+
 #pragma mark - Color helpers
 
 static UIColor *GTDefaultAccentColor(void) {

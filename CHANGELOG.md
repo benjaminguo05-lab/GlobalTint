@@ -1,5 +1,11 @@
 # GlobalTint Changelog
 
+## 0.2.5
+
+- Fixed V0.2.4 compile error: `GTShouldApplyBase` was referenced before declaration.
+- Added an explicit forward declaration for `GTShouldApplyBase(void)`.
+- No runtime behavior changes from V0.2.4.
+
 ## 0.2.4
 
 - Injection test confirmed App Store and Safari load GlobalTint correctly.
