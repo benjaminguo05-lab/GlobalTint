@@ -61,6 +61,13 @@ static char GTOriginalProgressTintColorKey;
 static char GTOriginalSegmentTintColorKey;
 static char GTOriginalPageCurrentTintColorKey;
 
+// V0.2.1: UITabBarAppearance / UITabBarItem appearance restoration.
+static char GTOriginalTabBarStandardAppearanceKey;
+static char GTOriginalTabBarScrollEdgeAppearanceKey;
+static char GTOriginalTabItemStandardAppearanceKey;
+static char GTOriginalTabItemScrollEdgeAppearanceKey;
+static char GTApplyingTabAppearanceKey;
+
 #pragma mark - Color helpers
 
 static UIColor *GTDefaultAccentColor(void) {
@@ -384,15 +391,268 @@ static void GTApplyNavigationBar(UINavigationBar *bar) {
                          GTColorForComponentHex(GTNavigationBarHex));
 }
 
+static NSDictionary *GTTitleAttributesWithColor(NSDictionary *attributes,
+                                                   UIColor *color) {
+    NSMutableDictionary *result =
+        attributes ? [attributes mutableCopy] : [NSMutableDictionary dictionary];
+
+    if (color) {
+        result[NSForegroundColorAttributeName] = color;
+    }
+
+    return result;
+}
+
+static void GTColorTabBarItemAppearance(UITabBarItemAppearance *appearance,
+                                        UIColor *color) {
+    if (!appearance || !color) {
+        return;
+    }
+
+    appearance.selected.iconColor = color;
+    appearance.selected.titleTextAttributes =
+        GTTitleAttributesWithColor(appearance.selected.titleTextAttributes,
+                                   color);
+}
+
+static UITabBarAppearance *GTColoredTabBarAppearance(UITabBarAppearance *source,
+                                                     UIColor *color) {
+    if (!source || !color) {
+        return source;
+    }
+
+    UITabBarAppearance *appearance = [source copy];
+
+    GTColorTabBarItemAppearance(appearance.stackedLayoutAppearance, color);
+    GTColorTabBarItemAppearance(appearance.inlineLayoutAppearance, color);
+    GTColorTabBarItemAppearance(appearance.compactInlineLayoutAppearance, color);
+
+    appearance.selectionIndicatorTintColor = color;
+
+    return appearance;
+}
+
+static void GTRememberTabBarAppearances(UITabBar *bar) {
+    if (!objc_getAssociatedObject(bar, &GTOriginalTabBarStandardAppearanceKey)) {
+        objc_setAssociatedObject(
+            bar,
+            &GTOriginalTabBarStandardAppearanceKey,
+            [bar.standardAppearance copy],
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    if (!objc_getAssociatedObject(bar, &GTOriginalTabBarScrollEdgeAppearanceKey)) {
+        id boxed =
+            bar.scrollEdgeAppearance
+            ? (id)[bar.scrollEdgeAppearance copy]
+            : (id)[NSNull null];
+
+        objc_setAssociatedObject(
+            bar,
+            &GTOriginalTabBarScrollEdgeAppearanceKey,
+            boxed,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+}
+
+static void GTRememberTabBarItemAppearances(UITabBarItem *item) {
+    if (!item) {
+        return;
+    }
+
+    if (@available(iOS 15.0, *)) {
+        if (!objc_getAssociatedObject(item,
+                                      &GTOriginalTabItemStandardAppearanceKey)) {
+            id boxed =
+                item.standardAppearance
+                ? (id)[item.standardAppearance copy]
+                : (id)[NSNull null];
+
+            objc_setAssociatedObject(
+                item,
+                &GTOriginalTabItemStandardAppearanceKey,
+                boxed,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+
+        if (!objc_getAssociatedObject(item,
+                                      &GTOriginalTabItemScrollEdgeAppearanceKey)) {
+            id boxed =
+                item.scrollEdgeAppearance
+                ? (id)[item.scrollEdgeAppearance copy]
+                : (id)[NSNull null];
+
+            objc_setAssociatedObject(
+                item,
+                &GTOriginalTabItemScrollEdgeAppearanceKey,
+                boxed,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+    }
+}
+
+static UITabBarAppearance *GTUnboxTabAppearance(id value) {
+    if (!value || value == [NSNull null]) {
+        return nil;
+    }
+
+    return [value isKindOfClass:[UITabBarAppearance class]]
+        ? value
+        : nil;
+}
+
+static void GTRestoreTabBarAppearances(UITabBar *bar) {
+    id standard =
+        objc_getAssociatedObject(bar, &GTOriginalTabBarStandardAppearanceKey);
+
+    id scrollEdge =
+        objc_getAssociatedObject(bar, &GTOriginalTabBarScrollEdgeAppearanceKey);
+
+    objc_setAssociatedObject(bar,
+                             &GTApplyingTabAppearanceKey,
+                             @YES,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    if (standard) {
+        UITabBarAppearance *appearance = GTUnboxTabAppearance(standard);
+        if (appearance) {
+            bar.standardAppearance = [appearance copy];
+        }
+    }
+
+    if (scrollEdge) {
+        UITabBarAppearance *appearance = GTUnboxTabAppearance(scrollEdge);
+        bar.scrollEdgeAppearance = appearance ? [appearance copy] : nil;
+    }
+
+    if (@available(iOS 15.0, *)) {
+        for (UITabBarItem *item in bar.items) {
+            id itemStandard =
+                objc_getAssociatedObject(
+                    item,
+                    &GTOriginalTabItemStandardAppearanceKey
+                );
+
+            id itemScrollEdge =
+                objc_getAssociatedObject(
+                    item,
+                    &GTOriginalTabItemScrollEdgeAppearanceKey
+                );
+
+            if (itemStandard) {
+                UITabBarAppearance *appearance =
+                    GTUnboxTabAppearance(itemStandard);
+
+                item.standardAppearance =
+                    appearance ? [appearance copy] : nil;
+            }
+
+            if (itemScrollEdge) {
+                UITabBarAppearance *appearance =
+                    GTUnboxTabAppearance(itemScrollEdge);
+
+                item.scrollEdgeAppearance =
+                    appearance ? [appearance copy] : nil;
+            }
+
+            objc_setAssociatedObject(
+                item,
+                &GTOriginalTabItemStandardAppearanceKey,
+                nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+
+            objc_setAssociatedObject(
+                item,
+                &GTOriginalTabItemScrollEdgeAppearanceKey,
+                nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+    }
+
+    objc_setAssociatedObject(bar,
+                             &GTApplyingTabAppearanceKey,
+                             nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    objc_setAssociatedObject(bar,
+                             &GTOriginalTabBarStandardAppearanceKey,
+                             nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    objc_setAssociatedObject(bar,
+                             &GTOriginalTabBarScrollEdgeAppearanceKey,
+                             nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 static void GTApplyTabBar(UITabBar *bar) {
     BOOL apply =
         GTShouldApplyBase() &&
         GTApplyBars &&
         GTEnableTabBar;
 
-    GTApplyOrRestoreTint(bar,
-                         apply,
-                         GTColorForComponentHex(GTTabBarHex));
+    UIColor *color = GTColorForComponentHex(GTTabBarHex);
+
+    // Legacy/public tint path.
+    GTApplyOrRestoreTint(bar, apply, color);
+
+    if (!apply || !color) {
+        GTRestoreTabBarAppearances(bar);
+        return;
+    }
+
+    GTRememberTabBarAppearances(bar);
+
+    objc_setAssociatedObject(bar,
+                             &GTApplyingTabAppearanceKey,
+                             @YES,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+    // iOS 13+ appearance path. This is what apps such as App Store commonly use.
+    UITabBarAppearance *standard =
+        GTColoredTabBarAppearance(bar.standardAppearance, color);
+
+    if (standard) {
+        bar.standardAppearance = standard;
+    }
+
+    if (bar.scrollEdgeAppearance) {
+        UITabBarAppearance *scrollEdge =
+            GTColoredTabBarAppearance(bar.scrollEdgeAppearance, color);
+
+        if (scrollEdge) {
+            bar.scrollEdgeAppearance = scrollEdge;
+        }
+    }
+
+    // iOS 15+: an individual UITabBarItem can override the whole tab bar
+    // appearance, so modify explicit per-item appearances as well.
+    if (@available(iOS 15.0, *)) {
+        for (UITabBarItem *item in bar.items) {
+            GTRememberTabBarItemAppearances(item);
+
+            if (item.standardAppearance) {
+                item.standardAppearance =
+                    GTColoredTabBarAppearance(item.standardAppearance, color);
+            }
+
+            if (item.scrollEdgeAppearance) {
+                item.scrollEdgeAppearance =
+                    GTColoredTabBarAppearance(item.scrollEdgeAppearance, color);
+            }
+        }
+    }
+
+    objc_setAssociatedObject(bar,
+                             &GTApplyingTabAppearanceKey,
+                             nil,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 }
 
 static void GTApplyToolbar(UIToolbar *bar) {
@@ -567,10 +827,72 @@ static void GTRefreshKnownWindows(void) {
 %end
 
 %hook UITabBar
+
 - (void)didMoveToWindow {
     %orig;
     GTApplyTabBar(self);
 }
+
+- (void)setItems:(NSArray<UITabBarItem *> *)items animated:(BOOL)animated {
+    %orig(items, animated);
+    GTApplyTabBar(self);
+}
+
+- (void)setSelectedItem:(UITabBarItem *)selectedItem {
+    %orig(selectedItem);
+    GTApplyTabBar(self);
+}
+
+- (void)setStandardAppearance:(UITabBarAppearance *)appearance {
+    BOOL internalApply =
+        [objc_getAssociatedObject(self, &GTApplyingTabAppearanceKey) boolValue];
+
+    // If the host app changes its appearance while GlobalTint is active,
+    // remember the newest host-provided appearance as the restoration target.
+    if (!internalApply &&
+        GTShouldApplyBase() &&
+        GTApplyBars &&
+        GTEnableTabBar) {
+
+        objc_setAssociatedObject(
+            self,
+            &GTOriginalTabBarStandardAppearanceKey,
+            appearance ? (id)[appearance copy] : (id)[NSNull null],
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    %orig(appearance);
+
+    if (!internalApply) {
+        GTApplyTabBar(self);
+    }
+}
+
+- (void)setScrollEdgeAppearance:(UITabBarAppearance *)appearance {
+    BOOL internalApply =
+        [objc_getAssociatedObject(self, &GTApplyingTabAppearanceKey) boolValue];
+
+    if (!internalApply &&
+        GTShouldApplyBase() &&
+        GTApplyBars &&
+        GTEnableTabBar) {
+
+        objc_setAssociatedObject(
+            self,
+            &GTOriginalTabBarScrollEdgeAppearanceKey,
+            appearance ? (id)[appearance copy] : (id)[NSNull null],
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    %orig(appearance);
+
+    if (!internalApply) {
+        GTApplyTabBar(self);
+    }
+}
+
 %end
 
 %hook UIToolbar

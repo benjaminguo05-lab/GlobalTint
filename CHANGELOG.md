@@ -1,5 +1,14 @@
 # GlobalTint Changelog
 
+## 0.2.1
+
+- Fixed UITabBar selected item colors in apps that use `UITabBarAppearance`.
+- Applies selected icon/title color to stacked, inline and compact-inline item appearances.
+- Handles `standardAppearance` and `scrollEdgeAppearance`.
+- Handles explicit per-`UITabBarItem` appearances on iOS 15+.
+- Re-applies TabBar color if the host app replaces its appearance after startup.
+- Restores remembered TabBar appearances when the feature is disabled or the app is excluded.
+
 ## 0.2.0
 
 - Added per-app exclusion by Bundle ID.
