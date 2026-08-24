@@ -9,8 +9,8 @@ BUNDLE_NAME = GlobalTintPrefs
 
 GlobalTintPrefs_FILES = GTListController.m
 GlobalTintPrefs_FRAMEWORKS = UIKit
-GlobalTintPrefs_PRIVATE_FRAMEWORKS = Preferences
 GlobalTintPrefs_EXTRA_FRAMEWORKS = Cephei
+GlobalTintPrefs_LDFLAGS = -undefined dynamic_lookup
 GlobalTintPrefs_INSTALL_PATH = /Library/PreferenceBundles
 GlobalTintPrefs_CFLAGS = -fobjc-arc
 GlobalTintPrefs_CCFLAGS = -std=c++17
