@@ -237,9 +237,15 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                                   key:@"DebugInjectionBorder"
                          defaultValue:NO]];
 
+
+    [items addObject:
+        [self switchSpecifierWithName:@"强制替换已解析蓝色"
+                                  key:@"ForceResolvedBlue"
+                         defaultValue:NO]];
+
     PSSpecifier *debugHelp = [PSSpecifier emptyGroupSpecifier];
     [debugHelp setProperty:
-        @"开启“注入测试边框”后，成功加载 GlobalTint 的 App 窗口四周会出现 3pt 主题色边框。测试完请关闭。"
+        @"开启“注入测试边框”后，成功加载 GlobalTint 的 App 窗口四周会出现 3pt 主题色边框。测试完请关闭。“强制替换已解析蓝色”会拦截已经写入 UIView.tintColor / UILabel.textColor 的系统蓝，专门用于 App Store、Safari 等兼容场景。"
         forKey:@"footerText"];
     [items addObject:debugHelp];
 
