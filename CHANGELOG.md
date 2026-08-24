@@ -1,5 +1,11 @@
 # GlobalTint Changelog
 
+## 0.2.3
+
+- Fixed the `语义蓝兼容色` button doing nothing.
+- Added the missing `chooseSemanticBlueColor` action method.
+- Added a static selector/action sanity check before packaging this revision.
+
 ## 0.2.2
 
 - Added an optional System Blue semantic-color replacement.
