@@ -1,5 +1,13 @@
 # GlobalTint Changelog
 
+## 0.2.2
+
+- Added an optional System Blue semantic-color replacement.
+- Added an optional Link Color semantic-color replacement.
+- Added a separate semantic compatibility color (falls back to main accent).
+- Added a 3pt injection-test border for confirming per-app tweak injection.
+- Added MobileSafari `BrowserToolbar` compatibility and forces `interactionTintColor` when Toolbar coloring is enabled.
+
 ## 0.2.1
 
 - Fixed UITabBar selected item colors in apps that use `UITabBarAppearance`.

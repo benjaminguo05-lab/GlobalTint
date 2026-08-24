@@ -1,6 +1,11 @@
 #import <UIKit/UIKit.h>
 #import <Cephei/HBPreferences.h>
 #import <objc/runtime.h>
+#import <objc/message.h>
+
+
+@interface BrowserToolbar : UIView
+@end
 
 static NSString * const GTPrefsIdentifier = @"com.benja.globaltint";
 
@@ -32,6 +37,12 @@ static BOOL GTEnableSearchBar = YES;
 
 // Color mode
 static BOOL GTUseSeparateColors = NO;
+
+// V0.2.2 compatibility / diagnostics
+static BOOL GTReplaceSystemBlue = NO;
+static BOOL GTReplaceLinkColor = NO;
+static BOOL GTDebugInjectionBorder = NO;
+static NSString *GTSemanticBlueHex = @"";
 
 // Preferences strings
 static NSString *GTAccentHex = @"#0A84FF";
@@ -67,6 +78,8 @@ static char GTOriginalTabBarScrollEdgeAppearanceKey;
 static char GTOriginalTabItemStandardAppearanceKey;
 static char GTOriginalTabItemScrollEdgeAppearanceKey;
 static char GTApplyingTabAppearanceKey;
+static char GTOriginalWindowBorderWidthKey;
+static char GTOriginalWindowBorderColorKey;
 
 #pragma mark - Color helpers
 
@@ -133,6 +146,15 @@ static UIColor *GTColorForComponentHex(NSString *componentHex) {
     }
 
     return GTColorFromHexOrNil(componentHex) ?: GTAccentColor;
+}
+
+
+static UIColor *GTSemanticBlueColor(void) {
+    if (!GTAccentColor) {
+        GTAccentColor = GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
+    }
+
+    return GTColorFromHexOrNil(GTSemanticBlueHex) ?: GTAccentColor;
 }
 
 static void GTRunOnMain(dispatch_block_t block) {
@@ -251,9 +273,80 @@ static void GTApplyOrRestoreTint(UIView *view,
     }
 }
 
+static void GTApplyDebugBorder(UIWindow *window) {
+    if (!window) {
+        return;
+    }
+
+    BOOL apply =
+        GTShouldApplyBase() &&
+        GTDebugInjectionBorder;
+
+    if (apply) {
+        if (!objc_getAssociatedObject(window, &GTOriginalWindowBorderWidthKey)) {
+            objc_setAssociatedObject(
+                window,
+                &GTOriginalWindowBorderWidthKey,
+                @(window.layer.borderWidth),
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+
+        if (!objc_getAssociatedObject(window, &GTOriginalWindowBorderColorKey)) {
+            id color =
+                window.layer.borderColor
+                ? (id)[UIColor colorWithCGColor:window.layer.borderColor]
+                : (id)[NSNull null];
+
+            objc_setAssociatedObject(
+                window,
+                &GTOriginalWindowBorderColorKey,
+                color,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+
+        window.layer.borderWidth = 3.0;
+        window.layer.borderColor = GTSemanticBlueColor().CGColor;
+    } else {
+        NSNumber *width =
+            objc_getAssociatedObject(window, &GTOriginalWindowBorderWidthKey);
+
+        id boxedColor =
+            objc_getAssociatedObject(window, &GTOriginalWindowBorderColorKey);
+
+        if (width) {
+            window.layer.borderWidth = width.doubleValue;
+            objc_setAssociatedObject(
+                window,
+                &GTOriginalWindowBorderWidthKey,
+                nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+
+        if (boxedColor) {
+            UIColor *color =
+                boxedColor == [NSNull null]
+                ? nil
+                : ([boxedColor isKindOfClass:[UIColor class]] ? boxedColor : nil);
+
+            window.layer.borderColor = color.CGColor;
+
+            objc_setAssociatedObject(
+                window,
+                &GTOriginalWindowBorderColorKey,
+                nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+    }
+}
+
 static void GTApplyWindow(UIWindow *window) {
     BOOL apply = GTShouldApplyBase() && GTEnableWindowTint;
     GTApplyOrRestoreTint(window, apply, GTColorForComponentHex(GTWindowHex));
+    GTApplyDebugBorder(window);
 }
 
 static void GTApplySwitchControl(UISwitch *control) {
@@ -744,6 +837,28 @@ static void GTRefreshKnownWindows(void) {
     });
 }
 
+#pragma mark - Semantic UIKit colors
+
+%hook UIColor
+
++ (UIColor *)systemBlueColor {
+    if (GTShouldApplyBase() && GTReplaceSystemBlue) {
+        return GTSemanticBlueColor();
+    }
+
+    return %orig;
+}
+
++ (UIColor *)linkColor {
+    if (GTShouldApplyBase() && GTReplaceLinkColor) {
+        return GTSemanticBlueColor();
+    }
+
+    return %orig;
+}
+
+%end
+
 #pragma mark - UIWindow
 
 %hook UIWindow
@@ -909,6 +1024,63 @@ static void GTRefreshKnownWindows(void) {
 }
 %end
 
+
+#pragma mark - MobileSafari private toolbar compatibility
+
+%hook BrowserToolbar
+
+- (void)didMoveToWindow {
+    %orig;
+
+    NSString *bundleID = NSBundle.mainBundle.bundleIdentifier.lowercaseString;
+
+    if (![bundleID isEqualToString:@"com.apple.mobilesafari"]) {
+        return;
+    }
+
+    if (!GTShouldApplyBase() ||
+        !GTApplyBars ||
+        !GTEnableToolbar) {
+        return;
+    }
+
+    UIColor *color = GTColorForComponentHex(GTToolbarHex);
+    self.tintColor = color;
+
+    SEL selector = NSSelectorFromString(@"setInteractionTintColor:");
+
+    if ([self respondsToSelector:selector]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(self, selector, color);
+    }
+}
+
+- (void)layoutSubviews {
+    %orig;
+
+    NSString *bundleID = NSBundle.mainBundle.bundleIdentifier.lowercaseString;
+
+    if (![bundleID isEqualToString:@"com.apple.mobilesafari"]) {
+        return;
+    }
+
+    if (!GTShouldApplyBase() ||
+        !GTApplyBars ||
+        !GTEnableToolbar) {
+        return;
+    }
+
+    UIColor *color = GTColorForComponentHex(GTToolbarHex);
+    self.tintColor = color;
+
+    SEL selector = NSSelectorFromString(@"setInteractionTintColor:");
+
+    if ([self respondsToSelector:selector]) {
+        ((void (*)(id, SEL, id))objc_msgSend)(self, selector, color);
+    }
+}
+
+%end
+
 #pragma mark - Preferences
 
 static void GTRegisterPreferences(void) {
@@ -935,6 +1107,19 @@ static void GTRegisterPreferences(void) {
     [GTPreferences registerBool:&GTUseSeparateColors
                          default:NO
                           forKey:@"UseSeparateColors"];
+
+
+    [GTPreferences registerBool:&GTReplaceSystemBlue
+                         default:NO
+                          forKey:@"ReplaceSystemBlue"];
+
+    [GTPreferences registerBool:&GTReplaceLinkColor
+                         default:NO
+                          forKey:@"ReplaceLinkColor"];
+
+    [GTPreferences registerBool:&GTDebugInjectionBorder
+                         default:NO
+                          forKey:@"DebugInjectionBorder"];
 
     [GTPreferences registerBool:&GTEnableSwitch
                          default:YES
