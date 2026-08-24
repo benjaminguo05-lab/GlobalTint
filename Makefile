@@ -12,6 +12,9 @@ GlobalTint_FILES = Tweak.xm
 GlobalTint_FRAMEWORKS = UIKit
 GlobalTint_EXTRA_FRAMEWORKS = Cephei
 GlobalTint_CFLAGS = -fobjc-arc
+# Cephei's generated Swift compatibility header uses C++11+ aliases.
+# Tweak.xm is Objective-C++, so force a modern C++ standard.
+GlobalTint_CXXFLAGS = -std=c++17
 
 include $(THEOS_MAKE_PATH)/tweak.mk
 
