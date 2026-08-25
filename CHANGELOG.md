@@ -1,5 +1,33 @@
 # GlobalTint Changelog
 
+## 0.4.6
+
+- Added notification badge customization for ordinary App tab bars.
+- New global preferences:
+  - `ApplyTabBarBadge` (default OFF)
+  - `BadgeBackgroundColor`
+  - `BadgeTextColor`
+- New per-App color keys:
+  - `BadgeBackgroundColor`
+  - `BadgeTextColor`
+- New per-App switch key:
+  - `TabBarBadge`
+- Supports both legacy `UITabBarItem.badgeColor` /
+  `badgeTextAttributes` and modern `UITabBarAppearance`
+  `badgeBackgroundColor` / `badgeTextAttributes`.
+- Original badge colors/attributes are remembered and restored when disabled.
+- Badge background follows the App/global accent when separate colors are OFF;
+  badge text defaults to white.
+- Added local configuration backup:
+  - Save current configuration
+  - Restore saved configuration
+  - Delete saved configuration
+- A saved configuration contains all GlobalTint runtime settings, App profiles,
+  component colors/switches, compatibility settings, and exclusion list.
+- Reset-to-default now preserves the saved configuration backup.
+- No SpringBoard/System UI hooks were added. The V0.4.2 hard quarantine
+  architecture remains unchanged.
+
 ## 0.4.5
 
 - Fixed a localization regression introduced while translating V0.4.3/V0.4.4.

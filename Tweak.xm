@@ -32,6 +32,7 @@ static BOOL GTEnableRefreshControl = YES;
 
 static BOOL GTEnableNavigationBar = YES;
 static BOOL GTEnableTabBar = YES;
+static BOOL GTEnableTabBarBadge = NO;
 static BOOL GTEnableToolbar = YES;
 static BOOL GTEnableSearchBar = YES;
 
@@ -61,6 +62,8 @@ static NSString *GTRefreshControlHex = @"";
 
 static NSString *GTNavigationBarHex = @"";
 static NSString *GTTabBarHex = @"";
+static NSString *GTBadgeBackgroundHex = @"";
+static NSString *GTBadgeTextHex = @"";
 static NSString *GTToolbarHex = @"";
 static NSString *GTSearchBarHex = @"";
 
@@ -85,6 +88,10 @@ static char GTOriginalTabBarScrollEdgeAppearanceKey;
 static char GTOriginalTabItemStandardAppearanceKey;
 static char GTOriginalTabItemScrollEdgeAppearanceKey;
 static char GTApplyingTabAppearanceKey;
+static char GTOriginalBadgeColorKey;
+static char GTOriginalBadgeNormalTextAttributesKey;
+static char GTOriginalBadgeSelectedTextAttributesKey;
+static char GTApplyingBadgeAppearanceKey;
 static char GTOriginalWindowBorderWidthKey;
 static char GTOriginalWindowBorderColorKey;
 static char GTOriginalResolvedTintKey;
@@ -286,6 +293,52 @@ static UIColor *GTColorForComponent(NSString *componentKey,
         GTColorFromHexOrNil(componentHex);
 
     return globalComponentColor ?: baseAccent;
+}
+
+static UIColor *GTBadgeBackgroundColor(void) {
+    UIColor *baseAccent = GTCurrentAppAccentColor();
+
+    if (!GTUseSeparateColors) {
+        return baseAccent;
+    }
+
+    UIColor *appColor =
+        GTColorFromHexOrNil(
+            GTCurrentAppComponentOverrideHex(
+                @"BadgeBackgroundColor"
+            )
+        );
+
+    if (appColor) {
+        return appColor;
+    }
+
+    return
+        GTColorFromHexOrNil(GTBadgeBackgroundHex)
+        ?: baseAccent;
+}
+
+static UIColor *GTBadgeTextColor(void) {
+    UIColor *fallback = UIColor.whiteColor;
+
+    if (!GTUseSeparateColors) {
+        return fallback;
+    }
+
+    UIColor *appColor =
+        GTColorFromHexOrNil(
+            GTCurrentAppComponentOverrideHex(
+                @"BadgeTextColor"
+            )
+        );
+
+    if (appColor) {
+        return appColor;
+    }
+
+    return
+        GTColorFromHexOrNil(GTBadgeTextHex)
+        ?: fallback;
 }
 
 
@@ -1484,31 +1537,120 @@ static NSDictionary *GTTitleAttributesWithColor(NSDictionary *attributes,
     return result;
 }
 
-static void GTColorTabBarItemAppearance(UITabBarItemAppearance *appearance,
-                                        UIColor *color) {
-    if (!appearance || !color) {
+static void GTColorTabBarBadgeState(
+    UITabBarItemStateAppearance *state,
+    UIColor *backgroundColor,
+    UIColor *textColor
+) {
+    if (!state) {
         return;
     }
 
-    appearance.selected.iconColor = color;
-    appearance.selected.titleTextAttributes =
-        GTTitleAttributesWithColor(appearance.selected.titleTextAttributes,
-                                   color);
+    if (backgroundColor) {
+        state.badgeBackgroundColor = backgroundColor;
+    }
+
+    if (textColor) {
+        state.badgeTextAttributes =
+            GTTitleAttributesWithColor(
+                state.badgeTextAttributes,
+                textColor
+            );
+    }
 }
 
-static UITabBarAppearance *GTColoredTabBarAppearance(UITabBarAppearance *source,
-                                                     UIColor *color) {
-    if (!source || !color) {
+static void GTColorTabBarItemAppearance(
+    UITabBarItemAppearance *appearance,
+    UIColor *tabColor,
+    BOOL applyTabColor,
+    UIColor *badgeBackgroundColor,
+    UIColor *badgeTextColor,
+    BOOL applyBadge
+) {
+    if (!appearance) {
+        return;
+    }
+
+    if (applyTabColor && tabColor) {
+        appearance.selected.iconColor = tabColor;
+        appearance.selected.titleTextAttributes =
+            GTTitleAttributesWithColor(
+                appearance.selected.titleTextAttributes,
+                tabColor
+            );
+    }
+
+    if (applyBadge) {
+        GTColorTabBarBadgeState(
+            appearance.normal,
+            badgeBackgroundColor,
+            badgeTextColor
+        );
+
+        GTColorTabBarBadgeState(
+            appearance.selected,
+            badgeBackgroundColor,
+            badgeTextColor
+        );
+
+        GTColorTabBarBadgeState(
+            appearance.disabled,
+            badgeBackgroundColor,
+            badgeTextColor
+        );
+
+        GTColorTabBarBadgeState(
+            appearance.focused,
+            badgeBackgroundColor,
+            badgeTextColor
+        );
+    }
+}
+
+static UITabBarAppearance *GTColoredTabBarAppearance(
+    UITabBarAppearance *source,
+    UIColor *tabColor,
+    BOOL applyTabColor,
+    UIColor *badgeBackgroundColor,
+    UIColor *badgeTextColor,
+    BOOL applyBadge
+) {
+    if (!source) {
         return source;
     }
 
     UITabBarAppearance *appearance = [source copy];
 
-    GTColorTabBarItemAppearance(appearance.stackedLayoutAppearance, color);
-    GTColorTabBarItemAppearance(appearance.inlineLayoutAppearance, color);
-    GTColorTabBarItemAppearance(appearance.compactInlineLayoutAppearance, color);
+    GTColorTabBarItemAppearance(
+        appearance.stackedLayoutAppearance,
+        tabColor,
+        applyTabColor,
+        badgeBackgroundColor,
+        badgeTextColor,
+        applyBadge
+    );
 
-    appearance.selectionIndicatorTintColor = color;
+    GTColorTabBarItemAppearance(
+        appearance.inlineLayoutAppearance,
+        tabColor,
+        applyTabColor,
+        badgeBackgroundColor,
+        badgeTextColor,
+        applyBadge
+    );
+
+    GTColorTabBarItemAppearance(
+        appearance.compactInlineLayoutAppearance,
+        tabColor,
+        applyTabColor,
+        badgeBackgroundColor,
+        badgeTextColor,
+        applyBadge
+    );
+
+    if (applyTabColor && tabColor) {
+        appearance.selectionIndicatorTintColor = tabColor;
+    }
 
     return appearance;
 }
@@ -1586,6 +1728,224 @@ static UITabBarAppearance *GTUnboxTabAppearance(id value) {
         : nil;
 }
 
+static id GTBoxNullableObject(id value) {
+    return value ?: (id)[NSNull null];
+}
+
+static id GTUnboxNullableObject(id value) {
+    return (value && value != [NSNull null])
+        ? value
+        : nil;
+}
+
+static void GTRememberTabBarBadgeItem(UITabBarItem *item) {
+    if (!item) {
+        return;
+    }
+
+    if (!objc_getAssociatedObject(
+            item,
+            &GTOriginalBadgeColorKey)) {
+
+        objc_setAssociatedObject(
+            item,
+            &GTOriginalBadgeColorKey,
+            GTBoxNullableObject(item.badgeColor),
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    if (!objc_getAssociatedObject(
+            item,
+            &GTOriginalBadgeNormalTextAttributesKey)) {
+
+        NSDictionary *attributes =
+            [item badgeTextAttributesForState:
+                UIControlStateNormal];
+
+        objc_setAssociatedObject(
+            item,
+            &GTOriginalBadgeNormalTextAttributesKey,
+            GTBoxNullableObject(
+                attributes ? [attributes copy] : nil
+            ),
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    if (!objc_getAssociatedObject(
+            item,
+            &GTOriginalBadgeSelectedTextAttributesKey)) {
+
+        NSDictionary *attributes =
+            [item badgeTextAttributesForState:
+                UIControlStateSelected];
+
+        objc_setAssociatedObject(
+            item,
+            &GTOriginalBadgeSelectedTextAttributesKey,
+            GTBoxNullableObject(
+                attributes ? [attributes copy] : nil
+            ),
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+}
+
+static void GTRestoreTabBarBadgeItem(UITabBarItem *item) {
+    if (!item) {
+        return;
+    }
+
+    id originalColor =
+        objc_getAssociatedObject(
+            item,
+            &GTOriginalBadgeColorKey
+        );
+
+    id normalAttributes =
+        objc_getAssociatedObject(
+            item,
+            &GTOriginalBadgeNormalTextAttributesKey
+        );
+
+    id selectedAttributes =
+        objc_getAssociatedObject(
+            item,
+            &GTOriginalBadgeSelectedTextAttributesKey
+        );
+
+    if (!originalColor &&
+        !normalAttributes &&
+        !selectedAttributes) {
+        return;
+    }
+
+    objc_setAssociatedObject(
+        item,
+        &GTApplyingBadgeAppearanceKey,
+        @YES,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+
+    if (originalColor) {
+        item.badgeColor =
+            GTUnboxNullableObject(originalColor);
+    }
+
+    if (normalAttributes) {
+        [item setBadgeTextAttributes:
+            GTUnboxNullableObject(normalAttributes)
+            forState:UIControlStateNormal];
+    }
+
+    if (selectedAttributes) {
+        [item setBadgeTextAttributes:
+            GTUnboxNullableObject(selectedAttributes)
+            forState:UIControlStateSelected];
+    }
+
+    objc_setAssociatedObject(
+        item,
+        &GTApplyingBadgeAppearanceKey,
+        nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+
+    objc_setAssociatedObject(
+        item,
+        &GTOriginalBadgeColorKey,
+        nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+
+    objc_setAssociatedObject(
+        item,
+        &GTOriginalBadgeNormalTextAttributesKey,
+        nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+
+    objc_setAssociatedObject(
+        item,
+        &GTOriginalBadgeSelectedTextAttributesKey,
+        nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+static void GTApplyTabBarBadgeItem(
+    UITabBarItem *item,
+    BOOL apply,
+    UIColor *backgroundColor,
+    UIColor *textColor
+) {
+    if (!item) {
+        return;
+    }
+
+    if (!apply) {
+        GTRestoreTabBarBadgeItem(item);
+        return;
+    }
+
+    GTRememberTabBarBadgeItem(item);
+
+    objc_setAssociatedObject(
+        item,
+        &GTApplyingBadgeAppearanceKey,
+        @YES,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+
+    if (backgroundColor) {
+        item.badgeColor = backgroundColor;
+    }
+
+    if (textColor) {
+        NSDictionary *normal =
+            GTTitleAttributesWithColor(
+                [item badgeTextAttributesForState:
+                    UIControlStateNormal],
+                textColor
+            );
+
+        NSDictionary *selected =
+            GTTitleAttributesWithColor(
+                [item badgeTextAttributesForState:
+                    UIControlStateSelected],
+                textColor
+            );
+
+        [item setBadgeTextAttributes:normal
+                            forState:UIControlStateNormal];
+
+        [item setBadgeTextAttributes:selected
+                            forState:UIControlStateSelected];
+    }
+
+    objc_setAssociatedObject(
+        item,
+        &GTApplyingBadgeAppearanceKey,
+        nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+static UITabBarAppearance *GTBaseTabBarAppearance(
+    id storedOriginal,
+    UITabBarAppearance *current
+) {
+    UITabBarAppearance *original =
+        GTUnboxTabAppearance(storedOriginal);
+
+    if (original) {
+        return [original copy];
+    }
+
+    return current ? [current copy] : nil;
+}
+
 static void GTRestoreTabBarAppearances(UITabBar *bar) {
     id standard =
         objc_getAssociatedObject(bar, &GTOriginalTabBarStandardAppearanceKey);
@@ -1612,6 +1972,8 @@ static void GTRestoreTabBarAppearances(UITabBar *bar) {
 
     if (@available(iOS 15.0, *)) {
         for (UITabBarItem *item in bar.items) {
+            GTRestoreTabBarBadgeItem(item);
+
             id itemStandard =
                 objc_getAssociatedObject(
                     item,
@@ -1673,64 +2035,183 @@ static void GTRestoreTabBarAppearances(UITabBar *bar) {
 }
 
 static void GTApplyTabBar(UITabBar *bar) {
-    BOOL apply = GTShouldApplyComponent(@"TabBar", GTEnableTabBar, GTApplyBars);
+    BOOL applyTab =
+        GTShouldApplyComponent(
+            @"TabBar",
+            GTEnableTabBar,
+            GTApplyBars
+        );
 
-    UIColor *color = GTColorForComponent(@"TabBarColor", GTTabBarHex);
+    BOOL applyBadge =
+        GTShouldApplyComponent(
+            @"TabBarBadge",
+            GTEnableTabBarBadge,
+            GTApplyBars
+        );
 
-    // Legacy/public tint path.
-    GTApplyOrRestoreTint(bar, apply, color);
+    UIColor *tabColor =
+        GTColorForComponent(
+            @"TabBarColor",
+            GTTabBarHex
+        );
 
-    if (!apply || !color) {
+    UIColor *badgeBackgroundColor =
+        GTBadgeBackgroundColor();
+
+    UIColor *badgeTextColor =
+        GTBadgeTextColor();
+
+    // Legacy/public tint path for selected tab item.
+    GTApplyOrRestoreTint(
+        bar,
+        applyTab,
+        tabColor
+    );
+
+    if (!applyTab && !applyBadge) {
         GTRestoreTabBarAppearances(bar);
         return;
     }
 
     GTRememberTabBarAppearances(bar);
 
-    objc_setAssociatedObject(bar,
-                             &GTApplyingTabAppearanceKey,
-                             @YES,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(
+        bar,
+        &GTApplyingTabAppearanceKey,
+        @YES,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
 
-    // iOS 13+ appearance path. This is what apps such as App Store commonly use.
+    id originalStandard =
+        objc_getAssociatedObject(
+            bar,
+            &GTOriginalTabBarStandardAppearanceKey
+        );
+
+    UITabBarAppearance *standardSource =
+        GTBaseTabBarAppearance(
+            originalStandard,
+            bar.standardAppearance
+        );
+
     UITabBarAppearance *standard =
-        GTColoredTabBarAppearance(bar.standardAppearance, color);
+        GTColoredTabBarAppearance(
+            standardSource,
+            tabColor,
+            applyTab,
+            badgeBackgroundColor,
+            badgeTextColor,
+            applyBadge
+        );
 
     if (standard) {
         bar.standardAppearance = standard;
     }
 
-    if (bar.scrollEdgeAppearance) {
+    id originalScrollEdge =
+        objc_getAssociatedObject(
+            bar,
+            &GTOriginalTabBarScrollEdgeAppearanceKey
+        );
+
+    UITabBarAppearance *scrollSource =
+        GTBaseTabBarAppearance(
+            originalScrollEdge,
+            bar.scrollEdgeAppearance
+        );
+
+    if (scrollSource) {
         UITabBarAppearance *scrollEdge =
-            GTColoredTabBarAppearance(bar.scrollEdgeAppearance, color);
+            GTColoredTabBarAppearance(
+                scrollSource,
+                tabColor,
+                applyTab,
+                badgeBackgroundColor,
+                badgeTextColor,
+                applyBadge
+            );
 
         if (scrollEdge) {
             bar.scrollEdgeAppearance = scrollEdge;
         }
     }
 
-    // iOS 15+: an individual UITabBarItem can override the whole tab bar
-    // appearance, so modify explicit per-item appearances as well.
     if (@available(iOS 15.0, *)) {
         for (UITabBarItem *item in bar.items) {
+            GTApplyTabBarBadgeItem(
+                item,
+                applyBadge,
+                badgeBackgroundColor,
+                badgeTextColor
+            );
+
             GTRememberTabBarItemAppearances(item);
 
-            if (item.standardAppearance) {
+            id originalItemStandard =
+                objc_getAssociatedObject(
+                    item,
+                    &GTOriginalTabItemStandardAppearanceKey
+                );
+
+            UITabBarAppearance *itemStandardSource =
+                GTBaseTabBarAppearance(
+                    originalItemStandard,
+                    item.standardAppearance
+                );
+
+            if (itemStandardSource) {
                 item.standardAppearance =
-                    GTColoredTabBarAppearance(item.standardAppearance, color);
+                    GTColoredTabBarAppearance(
+                        itemStandardSource,
+                        tabColor,
+                        applyTab,
+                        badgeBackgroundColor,
+                        badgeTextColor,
+                        applyBadge
+                    );
             }
 
-            if (item.scrollEdgeAppearance) {
+            id originalItemScroll =
+                objc_getAssociatedObject(
+                    item,
+                    &GTOriginalTabItemScrollEdgeAppearanceKey
+                );
+
+            UITabBarAppearance *itemScrollSource =
+                GTBaseTabBarAppearance(
+                    originalItemScroll,
+                    item.scrollEdgeAppearance
+                );
+
+            if (itemScrollSource) {
                 item.scrollEdgeAppearance =
-                    GTColoredTabBarAppearance(item.scrollEdgeAppearance, color);
+                    GTColoredTabBarAppearance(
+                        itemScrollSource,
+                        tabColor,
+                        applyTab,
+                        badgeBackgroundColor,
+                        badgeTextColor,
+                        applyBadge
+                    );
             }
+        }
+    } else {
+        for (UITabBarItem *item in bar.items) {
+            GTApplyTabBarBadgeItem(
+                item,
+                applyBadge,
+                badgeBackgroundColor,
+                badgeTextColor
+            );
         }
     }
 
-    objc_setAssociatedObject(bar,
-                             &GTApplyingTabAppearanceKey,
-                             nil,
-                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    objc_setAssociatedObject(
+        bar,
+        &GTApplyingTabAppearanceKey,
+        nil,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
 }
 
 static void GTApplyToolbar(UIToolbar *bar) {
@@ -2120,9 +2601,16 @@ static void GTRefreshKnownWindows(void) {
     // If the host app changes its appearance while GlobalTint is active,
     // remember the newest host-provided appearance as the restoration target.
     if (!internalApply &&
-        GTShouldApplyBase() &&
-        GTApplyBars &&
-        GTEnableTabBar) {
+        (GTShouldApplyComponent(
+            @"TabBar",
+            GTEnableTabBar,
+            GTApplyBars
+        ) ||
+         GTShouldApplyComponent(
+            @"TabBarBadge",
+            GTEnableTabBarBadge,
+            GTApplyBars
+        ))) {
 
         objc_setAssociatedObject(
             self,
@@ -2144,9 +2632,16 @@ static void GTRefreshKnownWindows(void) {
         [objc_getAssociatedObject(self, &GTApplyingTabAppearanceKey) boolValue];
 
     if (!internalApply &&
-        GTShouldApplyBase() &&
-        GTApplyBars &&
-        GTEnableTabBar) {
+        (GTShouldApplyComponent(
+            @"TabBar",
+            GTEnableTabBar,
+            GTApplyBars
+        ) ||
+         GTShouldApplyComponent(
+            @"TabBarBadge",
+            GTEnableTabBarBadge,
+            GTApplyBars
+        ))) {
 
         objc_setAssociatedObject(
             self,
@@ -2160,6 +2655,121 @@ static void GTRefreshKnownWindows(void) {
 
     if (!internalApply) {
         GTApplyTabBar(self);
+    }
+}
+
+%end
+
+%hook UITabBarItem
+
+- (void)setBadgeValue:(NSString *)badgeValue {
+    %orig(badgeValue);
+
+    BOOL applyBadge =
+        GTShouldApplyComponent(
+            @"TabBarBadge",
+            GTEnableTabBarBadge,
+            GTApplyBars
+        );
+
+    GTApplyTabBarBadgeItem(
+        self,
+        applyBadge,
+        GTBadgeBackgroundColor(),
+        GTBadgeTextColor()
+    );
+}
+
+- (void)setBadgeColor:(UIColor *)badgeColor {
+    BOOL internalApply =
+        [objc_getAssociatedObject(
+            self,
+            &GTApplyingBadgeAppearanceKey
+        ) boolValue];
+
+    BOOL applyBadge =
+        GTShouldApplyComponent(
+            @"TabBarBadge",
+            GTEnableTabBarBadge,
+            GTApplyBars
+        );
+
+    if (!internalApply && applyBadge) {
+        objc_setAssociatedObject(
+            self,
+            &GTOriginalBadgeColorKey,
+            GTBoxNullableObject(badgeColor),
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    } else if (!internalApply && !applyBadge) {
+        objc_setAssociatedObject(
+            self,
+            &GTOriginalBadgeColorKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+
+    %orig(badgeColor);
+
+    if (!internalApply) {
+        GTApplyTabBarBadgeItem(
+            self,
+            applyBadge,
+            GTBadgeBackgroundColor(),
+            GTBadgeTextColor()
+        );
+    }
+}
+
+- (void)setBadgeTextAttributes:(NSDictionary *)textAttributes
+                      forState:(UIControlState)state {
+
+    BOOL internalApply =
+        [objc_getAssociatedObject(
+            self,
+            &GTApplyingBadgeAppearanceKey
+        ) boolValue];
+
+    BOOL applyBadge =
+        GTShouldApplyComponent(
+            @"TabBarBadge",
+            GTEnableTabBarBadge,
+            GTApplyBars
+        );
+
+    if (!internalApply && applyBadge) {
+        char *key = NULL;
+
+        if (state == UIControlStateNormal) {
+            key = &GTOriginalBadgeNormalTextAttributesKey;
+        } else if (state == UIControlStateSelected) {
+            key = &GTOriginalBadgeSelectedTextAttributesKey;
+        }
+
+        if (key) {
+            objc_setAssociatedObject(
+                self,
+                key,
+                GTBoxNullableObject(
+                    textAttributes
+                    ? [textAttributes copy]
+                    : nil
+                ),
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+    }
+
+    %orig(textAttributes, state);
+
+    if (!internalApply) {
+        GTApplyTabBarBadgeItem(
+            self,
+            applyBadge,
+            GTBadgeBackgroundColor(),
+            GTBadgeTextColor()
+        );
     }
 }
 
@@ -2359,6 +2969,8 @@ GTNormalizedAppComponentColorOverrides(NSDictionary *source) {
             @"RefreshControlColor",
             @"NavigationBarColor",
             @"TabBarColor",
+            @"BadgeBackgroundColor",
+            @"BadgeTextColor",
             @"ToolbarColor",
             @"SearchBarColor"
         ]];
@@ -2440,6 +3052,7 @@ GTNormalizedAppComponentSwitchOverrides(NSDictionary *source) {
             @"RefreshControl",
             @"NavigationBar",
             @"TabBar",
+            @"TabBarBadge",
             @"Toolbar",
             @"SearchBar"
         ]];
@@ -2558,6 +3171,9 @@ static void GTLoadPreferencesFromDisk(void) {
     GTEnableTabBar =
         GTBoolPreference(@"ApplyTabBar", YES);
 
+    GTEnableTabBarBadge =
+        GTBoolPreference(@"ApplyTabBarBadge", NO);
+
     GTEnableToolbar =
         GTBoolPreference(@"ApplyToolbar", YES);
 
@@ -2596,6 +3212,12 @@ static void GTLoadPreferencesFromDisk(void) {
 
     GTTabBarHex =
         GTStringPreference(@"TabBarColor", @"");
+
+    GTBadgeBackgroundHex =
+        GTStringPreference(@"BadgeBackgroundColor", @"");
+
+    GTBadgeTextHex =
+        GTStringPreference(@"BadgeTextColor", @"");
 
     GTToolbarHex =
         GTStringPreference(@"ToolbarColor", @"");
@@ -2672,6 +3294,7 @@ static void GTRegisterPreferences(void) {
         @"ApplyRefreshControl": @YES,
         @"ApplyNavigationBar": @YES,
         @"ApplyTabBar": @YES,
+        @"ApplyTabBarBadge": @NO,
         @"ApplyToolbar": @YES,
         @"ApplySearchBar": @YES,
         @"AccentColor": @"#0A84FF",
@@ -2685,6 +3308,8 @@ static void GTRegisterPreferences(void) {
         @"RefreshControlColor": @"",
         @"NavigationBarColor": @"",
         @"TabBarColor": @"",
+        @"BadgeBackgroundColor": @"",
+        @"BadgeTextColor": @"",
         @"ToolbarColor": @"",
         @"SearchBarColor": @"",
         @"ExcludedBundleIDs": @"",

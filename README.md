@@ -320,3 +320,11 @@ preference keys and the V0.4.2 hard SpringBoard quarantine remain unchanged.
 Localization hotfix. Per-App component switch identifiers remain internal
 English keys while all user-facing names stay Chinese. App detail wording is
 also fully localized. Runtime and SpringBoard quarantine are unchanged.
+
+
+## V0.4.6
+
+Adds ordinary-App tab bar notification badge background/text colors, including
+global settings, per-App colors, and a per-App tri-state badge switch. Also
+adds a local full-configuration backup/restore feature. SpringBoard remains
+hard-quarantined and is not modified.
