@@ -1,5 +1,12 @@
 # GlobalTint Changelog
 
+## 0.2.10
+
+- Fixed UI Inspector reporting SpringBoard's `UISystemGestureView`.
+- Inspector now ignores the `com.apple.springboard` process entirely.
+- Ignores `_UISystemGestureWindow`, `UISystemGestureView`, hidden windows and near-transparent windows.
+- The next report should come from the actual target process such as `com.apple.AppStore` or `com.apple.mobilesafari`.
+
 ## 0.2.9
 
 - Reworked the UI inspector because Window-level `UILongPressGestureRecognizer`

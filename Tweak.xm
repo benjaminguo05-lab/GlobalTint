@@ -701,14 +701,67 @@ static void GTBeginInspectorTouch(UIWindow *window, UITouch *touch) {
             UIView *hitView =
                 [window hitTest:currentPoint withEvent:nil];
 
+            if (!GTInspectorViewIsEligible(hitView)) {
+                return;
+            }
+
             GTInspectorPresent(window, hitView);
         }
     );
 }
 
+static BOOL GTInspectorProcessIsEligible(void) {
+    NSString *bundleID =
+        NSBundle.mainBundle.bundleIdentifier.lowercaseString;
+
+    // SpringBoard receives system-gesture overlay touches through
+    // UISystemGestureView/_UISystemGestureWindow. Those are not the app UI
+    // elements we are trying to inspect.
+    if ([bundleID isEqualToString:@"com.apple.springboard"]) {
+        return NO;
+    }
+
+    return YES;
+}
+
+static BOOL GTInspectorWindowIsEligible(UIWindow *window) {
+    if (!window) {
+        return NO;
+    }
+
+    NSString *windowClass = NSStringFromClass(window.class);
+
+    if ([windowClass containsString:@"SystemGesture"] ||
+        [windowClass containsString:@"UISystemGesture"]) {
+        return NO;
+    }
+
+    if (window.hidden || window.alpha <= 0.01) {
+        return NO;
+    }
+
+    return YES;
+}
+
+static BOOL GTInspectorViewIsEligible(UIView *view) {
+    if (!view) {
+        return NO;
+    }
+
+    NSString *viewClass = NSStringFromClass(view.class);
+
+    if ([viewClass containsString:@"SystemGesture"] ||
+        [viewClass containsString:@"UISystemGesture"]) {
+        return NO;
+    }
+
+    return YES;
+}
+
 static void GTProcessInspectorEvent(UIEvent *event) {
     if (!GTElementInspector ||
         !GTShouldApplyBase() ||
+        !GTInspectorProcessIsEligible() ||
         event.type != UIEventTypeTouches) {
         return;
     }
@@ -722,7 +775,7 @@ static void GTProcessInspectorEvent(UIEvent *event) {
     for (UITouch *touch in touches) {
         UIWindow *window = touch.window;
 
-        if (!window) {
+        if (!GTInspectorWindowIsEligible(window)) {
             continue;
         }
 
