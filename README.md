@@ -291,11 +291,9 @@ Compile fix for the V0.3.4 App-detail Preferences controller. The `-specifiers`
 method boundary is restored; no tweak runtime or tint behavior changed.
 
 
-## V0.4.0
+## V0.4.1
 
-V0.4.0 starts SpringBoard/System UI support. Control Center, Lock Screen, and
-system menus each gain independent switches and colors. This first pass uses
-conservative view-class classification plus public UIKit tint propagation and
-restoration. The GT inspector is enabled in SpringBoard and now searches across
-SpringBoard's multiple windows so future versions can hook the exact private
-classes reported by the device.
+Emergency stable rollback. SpringBoard injection is explicitly disabled in the
+tweak constructor. The proven App-side libSandy/per-App tint architecture is
+kept intact. System UI support will be rebuilt separately with narrowly scoped
+SpringBoard hooks.

@@ -46,18 +46,6 @@ static BOOL GTReplaceLinkColor = NO;
 static BOOL GTDebugInjectionBorder = NO;
 static BOOL GTForceResolvedBlue = NO;
 static BOOL GTElementInspector = NO;
-
-// SpringBoard / System UI foundation (V0.4.0)
-static BOOL GTEnableSystemUI = NO;
-static BOOL GTEnableControlCenter = YES;
-static BOOL GTEnableLockScreen = YES;
-static BOOL GTEnableSystemMenus = YES;
-
-static NSString *GTSystemAccentHex = @"";
-static NSString *GTControlCenterHex = @"";
-static NSString *GTLockScreenHex = @"";
-static NSString *GTSystemMenuHex = @"";
-
 static NSString *GTSemanticBlueHex = @"";
 
 // Preferences strings
@@ -101,15 +89,11 @@ static char GTOriginalWindowBorderWidthKey;
 static char GTOriginalWindowBorderColorKey;
 static char GTOriginalResolvedTintKey;
 static char GTOriginalResolvedTextColorKey;
-static char GTOriginalSystemUITintColorKey;
-static char GTOriginalSystemUITextColorKey;
 
 static BOOL GTShouldApplyBase(void);
-static BOOL GTIsSpringBoardProcess(void);
 static BOOL GTInspectorProcessIsEligible(void);
 static BOOL GTInspectorWindowIsEligible(UIWindow *window);
 static BOOL GTInspectorViewIsEligible(UIView *view);
-static void GTApplySystemUIViewIfNeeded(UIView *view);
 
 #pragma mark - Color helpers
 
@@ -447,12 +431,7 @@ static BOOL GTCurrentProcessIsExcluded(void) {
 }
 
 static BOOL GTShouldApplyBase(void) {
-    // Ordinary per-App UIKit rules apply to application processes only.
-    // SpringBoard gets its own System UI rule path starting in V0.4.0.
-    return
-        GTEnabled &&
-        !GTCurrentProcessIsExcluded() &&
-        !GTIsSpringBoardProcess();
+    return GTEnabled && !GTCurrentProcessIsExcluded();
 }
 
 #pragma mark - Original color storage
@@ -738,17 +717,17 @@ static void GTInspectorPresent(UIWindow *window, UIView *hitView) {
                           completion:nil];
 }
 
-static BOOL GTIsSpringBoardProcess(void) {
+static BOOL GTInspectorProcessIsEligible(void) {
     NSString *bundleID =
         NSBundle.mainBundle.bundleIdentifier.lowercaseString;
 
-    return [bundleID
-        isEqualToString:@"com.apple.springboard"];
-}
+    // SpringBoard receives system-gesture overlay touches through
+    // UISystemGestureView/_UISystemGestureWindow. Those are not the app UI
+    // elements we are trying to inspect.
+    if ([bundleID isEqualToString:@"com.apple.springboard"]) {
+        return NO;
+    }
 
-static BOOL GTInspectorProcessIsEligible(void) {
-    // SpringBoard is now inspectable. GTInspectorWindowIsEligible still
-    // rejects _UISystemGestureWindow / UISystemGestureView.
     return YES;
 }
 
@@ -858,7 +837,7 @@ static UIWindow *GTInspectorBestSourceWindow(UIWindowScene *scene) {
     }
 
     UIWindow *keyCandidate = nil;
-    UIWindow *topCandidate = nil;
+    UIWindow *fallback = nil;
 
     for (UIWindow *window in scene.windows) {
         if (!GTInspectorCanUseSourceWindow(window)) {
@@ -867,70 +846,16 @@ static UIWindow *GTInspectorBestSourceWindow(UIWindowScene *scene) {
 
         if (window.isKeyWindow) {
             keyCandidate = window;
+            break;
         }
 
-        if (!topCandidate ||
-            window.windowLevel > topCandidate.windowLevel) {
-            topCandidate = window;
+        if (!fallback ||
+            window.windowLevel < fallback.windowLevel) {
+            fallback = window;
         }
     }
 
-    return keyCandidate ?: topCandidate;
-}
-
-static UIView *GTInspectorHitTestSceneAtPoint(
-    UIWindowScene *scene,
-    GTInspectorOverlayWindow *overlayWindow,
-    CGPoint overlayPoint,
-    UIWindow **matchedWindow
-) {
-    if (matchedWindow) {
-        *matchedWindow = nil;
-    }
-
-    if (!scene || !overlayWindow) {
-        return nil;
-    }
-
-    NSArray<UIWindow *> *windows =
-        [scene.windows sortedArrayUsingComparator:
-            ^NSComparisonResult(UIWindow *left, UIWindow *right) {
-
-        if (left.windowLevel > right.windowLevel) {
-            return NSOrderedAscending;
-        }
-
-        if (left.windowLevel < right.windowLevel) {
-            return NSOrderedDescending;
-        }
-
-        return NSOrderedSame;
-    }];
-
-    for (UIWindow *window in windows) {
-        if (!GTInspectorCanUseSourceWindow(window)) {
-            continue;
-        }
-
-        CGPoint point =
-            [overlayWindow convertPoint:overlayPoint
-                               toWindow:window];
-
-        UIView *hit =
-            [window hitTest:point withEvent:nil];
-
-        if (!GTInspectorViewIsEligible(hit)) {
-            continue;
-        }
-
-        if (matchedWindow) {
-            *matchedWindow = window;
-        }
-
-        return hit;
-    }
-
-    return nil;
+    return keyCandidate ?: fallback;
 }
 
 static void GTRemoveInspectorCapture(GTInspectorOverlayWindow *overlayWindow) {
@@ -1053,28 +978,33 @@ static void GTRemoveInspectorCapture(GTInspectorOverlayWindow *overlayWindow) {
     CGPoint screenPoint =
         [gesture locationInView:overlayWindow];
 
-    // Remove the capture interception first, then search all eligible windows
-    // from highest to lowest. This is important in SpringBoard because Control
-    // Center, Lock Screen and menus commonly live in separate windows.
+    UIWindow *sourceWindow = overlayWindow.gtSourceWindow;
+
+    if (!GTInspectorCanUseSourceWindow(sourceWindow)) {
+        sourceWindow =
+            GTInspectorBestSourceWindow(overlayWindow.windowScene);
+    }
+
+    // Remove the capture layer/window interception before asking the real
+    // application window which view is underneath this exact point.
     GTRemoveInspectorCapture(overlayWindow);
 
+    if (!sourceWindow) {
+        return;
+    }
+
+    CGPoint sourcePoint =
+        [overlayWindow convertPoint:screenPoint
+                           toWindow:sourceWindow];
+
     dispatch_async(dispatch_get_main_queue(), ^{
-        UIWindow *sourceWindow = nil;
-
         UIView *hitView =
-            GTInspectorHitTestSceneAtPoint(
-                overlayWindow.windowScene,
-                overlayWindow,
-                screenPoint,
-                &sourceWindow
-            );
+            [sourceWindow hitTest:sourcePoint withEvent:nil];
 
-        if (!sourceWindow ||
-            !GTInspectorViewIsEligible(hitView)) {
+        if (!GTInspectorViewIsEligible(hitView)) {
             return;
         }
 
-        overlayWindow.gtSourceWindow = sourceWindow;
         GTInspectorPresent(sourceWindow, hitView);
     });
 }
@@ -1183,8 +1113,7 @@ static void GTUpdateSceneInspectorForSourceWindow(UIWindow *sourceWindow) {
 
     BOOL shouldShow =
         GTElementInspector &&
-        GTEnabled &&
-        !GTCurrentProcessIsExcluded() &&
+        GTShouldApplyBase() &&
         GTInspectorProcessIsEligible();
 
     GTInspectorOverlayWindow *overlayWindow =
@@ -1217,8 +1146,7 @@ static void GTUpdateSceneInspectorForSourceWindow(UIWindow *sourceWindow) {
 
 static void GTRefreshInspectorAcrossAllScenes(void) {
     if (!GTElementInspector ||
-        !GTEnabled ||
-        GTCurrentProcessIsExcluded() ||
+        !GTShouldApplyBase() ||
         !GTInspectorProcessIsEligible()) {
         // Hide any previously-created inspector windows if the feature is off.
         if (GTInspectorWindowsByScene) {
@@ -1347,293 +1275,6 @@ static void GTInstallInspectorLifecycleObservers(void) {
                          object:nil];
         }
     });
-}
-
-typedef NS_ENUM(NSInteger, GTSystemUIRegion) {
-    GTSystemUIRegionNone = 0,
-    GTSystemUIRegionControlCenter,
-    GTSystemUIRegionLockScreen,
-    GTSystemUIRegionMenu
-};
-
-static NSString *GTLowerClassName(id object) {
-    if (!object) {
-        return @"";
-    }
-
-    NSString *className =
-        NSStringFromClass([object class]);
-
-    return className.lowercaseString ?: @"";
-}
-
-static BOOL GTClassNameContainsAny(
-    NSString *className,
-    NSArray<NSString *> *tokens
-) {
-    if (className.length == 0) {
-        return NO;
-    }
-
-    for (NSString *token in tokens) {
-        if ([className containsString:
-                token.lowercaseString]) {
-            return YES;
-        }
-    }
-
-    return NO;
-}
-
-static GTSystemUIRegion GTSystemUIRegionForView(
-    UIView *view
-) {
-    if (!view || !GTIsSpringBoardProcess()) {
-        return GTSystemUIRegionNone;
-    }
-
-    static NSArray<NSString *> *controlCenterTokens = nil;
-    static NSArray<NSString *> *lockScreenTokens = nil;
-    static NSArray<NSString *> *menuTokens = nil;
-    static dispatch_once_t onceToken;
-
-    dispatch_once(&onceToken, ^{
-        controlCenterTokens = @[
-            @"ccui",
-            @"controlcenter",
-            @"ccuimodule"
-        ];
-
-        lockScreenTokens = @[
-            @"coversheet",
-            @"lockscreen",
-            @"sbuiproudlock",
-            @"sbflock",
-            @"csquickaction",
-            @"cscover",
-            @"csmain"
-        ];
-
-        menuTokens = @[
-            @"contextmenu",
-            @"alertcontroller",
-            @"alertview",
-            @"actionsheet",
-            @"uimenu",
-            @"uipreview"
-        ];
-    });
-
-    UIView *cursor = view;
-
-    for (NSInteger depth = 0;
-         cursor && depth < 10;
-         depth++, cursor = cursor.superview) {
-
-        NSString *className =
-            GTLowerClassName(cursor);
-
-        if (GTClassNameContainsAny(
-                className,
-                controlCenterTokens)) {
-            return GTSystemUIRegionControlCenter;
-        }
-
-        if (GTClassNameContainsAny(
-                className,
-                lockScreenTokens)) {
-            return GTSystemUIRegionLockScreen;
-        }
-
-        if (GTClassNameContainsAny(
-                className,
-                menuTokens)) {
-            return GTSystemUIRegionMenu;
-        }
-    }
-
-    return GTSystemUIRegionNone;
-}
-
-static UIColor *GTSystemBaseAccentColor(void) {
-    UIColor *specific =
-        GTColorFromHexOrNil(GTSystemAccentHex);
-
-    return specific ?: GTGlobalAccentColor();
-}
-
-static UIColor *GTColorForSystemUIRegion(
-    GTSystemUIRegion region
-) {
-    UIColor *base =
-        GTSystemBaseAccentColor();
-
-    switch (region) {
-        case GTSystemUIRegionControlCenter:
-            return
-                GTColorFromHexOrNil(GTControlCenterHex)
-                ?: base;
-
-        case GTSystemUIRegionLockScreen:
-            return
-                GTColorFromHexOrNil(GTLockScreenHex)
-                ?: base;
-
-        case GTSystemUIRegionMenu:
-            return
-                GTColorFromHexOrNil(GTSystemMenuHex)
-                ?: base;
-
-        case GTSystemUIRegionNone:
-        default:
-            return base;
-    }
-}
-
-static BOOL GTSystemUIRegionEnabled(
-    GTSystemUIRegion region
-) {
-    if (!GTEnabled ||
-        GTCurrentProcessIsExcluded() ||
-        !GTEnableSystemUI ||
-        !GTIsSpringBoardProcess()) {
-        return NO;
-    }
-
-    switch (region) {
-        case GTSystemUIRegionControlCenter:
-            return GTEnableControlCenter;
-
-        case GTSystemUIRegionLockScreen:
-            return GTEnableLockScreen;
-
-        case GTSystemUIRegionMenu:
-            return GTEnableSystemMenus;
-
-        case GTSystemUIRegionNone:
-        default:
-            return NO;
-    }
-}
-
-static BOOL GTLooksLikeBlueAccentColor(
-    UIColor *color
-) {
-    if (!color) {
-        return NO;
-    }
-
-    CGFloat r = 0.0;
-    CGFloat g = 0.0;
-    CGFloat b = 0.0;
-    CGFloat a = 0.0;
-
-    if (![color getRed:&r
-                 green:&g
-                  blue:&b
-                 alpha:&a]) {
-        return NO;
-    }
-
-    return
-        a > 0.05 &&
-        b > 0.50 &&
-        b > r * 1.18 &&
-        b > g * 1.03;
-}
-
-static void GTApplySystemUIViewIfNeeded(
-    UIView *view
-) {
-    if (!view || !GTIsSpringBoardProcess()) {
-        return;
-    }
-
-    GTSystemUIRegion region =
-        GTSystemUIRegionForView(view);
-
-    BOOL apply =
-        GTSystemUIRegionEnabled(region);
-
-    if (apply) {
-        UIColor *color =
-            GTColorForSystemUIRegion(region);
-
-        if (color) {
-            GTRememberColorOnce(
-                view,
-                &GTOriginalSystemUITintColorKey,
-                view.tintColor
-            );
-
-            view.tintColor = color;
-        }
-
-        if ([view isKindOfClass:[UILabel class]]) {
-            UILabel *label = (UILabel *)view;
-
-            if (GTLooksLikeBlueAccentColor(
-                    label.textColor)) {
-
-                GTRememberColorOnce(
-                    label,
-                    &GTOriginalSystemUITextColorKey,
-                    label.textColor
-                );
-
-                CGFloat alpha = 1.0;
-                CGFloat r = 0.0;
-                CGFloat g = 0.0;
-                CGFloat b = 0.0;
-
-                [label.textColor getRed:&r
-                                  green:&g
-                                   blue:&b
-                                  alpha:&alpha];
-
-                label.textColor =
-                    [color colorWithAlphaComponent:
-                        alpha];
-            }
-        }
-
-        return;
-    }
-
-    if (GTHasRememberedColor(
-            view,
-            &GTOriginalSystemUITintColorKey)) {
-
-        view.tintColor =
-            GTRememberedColor(
-                view,
-                &GTOriginalSystemUITintColorKey
-            );
-
-        GTClearRememberedColor(
-            view,
-            &GTOriginalSystemUITintColorKey
-        );
-    }
-
-    if ([view isKindOfClass:[UILabel class]] &&
-        GTHasRememberedColor(
-            view,
-            &GTOriginalSystemUITextColorKey)) {
-
-        UILabel *label = (UILabel *)view;
-
-        label.textColor =
-            GTRememberedColor(
-                label,
-                &GTOriginalSystemUITextColorKey
-            );
-
-        GTClearRememberedColor(
-            label,
-            &GTOriginalSystemUITextColorKey
-        );
-    }
 }
 
 static void GTApplyDebugBorder(UIWindow *window) {
@@ -2236,7 +1877,6 @@ static void GTApplyRecursively(UIView *view) {
     }
 
     GTApplyManagedPropertiesToView(view);
-    GTApplySystemUIViewIfNeeded(view);
 
     for (UIView *subview in view.subviews) {
         GTApplyRecursively(subview);
@@ -2267,14 +1907,6 @@ static void GTRefreshKnownWindows(void) {
 #pragma mark - Resolved color compatibility
 
 %hook UIView
-
-- (void)didMoveToWindow {
-    %orig;
-
-    if (GTIsSpringBoardProcess()) {
-        GTApplySystemUIViewIfNeeded(self);
-    }
-}
 
 - (void)setTintColor:(UIColor *)tintColor {
     UIColor *incoming = tintColor;
@@ -2902,18 +2534,6 @@ static void GTLoadPreferencesFromDisk(void) {
     GTElementInspector =
         GTBoolPreference(@"ElementInspector", NO);
 
-    GTEnableSystemUI =
-        GTBoolPreference(@"EnableSystemUI", NO);
-
-    GTEnableControlCenter =
-        GTBoolPreference(@"EnableControlCenter", YES);
-
-    GTEnableLockScreen =
-        GTBoolPreference(@"EnableLockScreen", YES);
-
-    GTEnableSystemMenus =
-        GTBoolPreference(@"EnableSystemMenus", YES);
-
     GTEnableSwitch =
         GTBoolPreference(@"ApplySwitch", YES);
 
@@ -2983,18 +2603,6 @@ static void GTLoadPreferencesFromDisk(void) {
     GTSearchBarHex =
         GTStringPreference(@"SearchBarColor", @"");
 
-    GTSystemAccentHex =
-        GTStringPreference(@"SystemAccentColor", @"");
-
-    GTControlCenterHex =
-        GTStringPreference(@"ControlCenterColor", @"");
-
-    GTLockScreenHex =
-        GTStringPreference(@"LockScreenColor", @"");
-
-    GTSystemMenuHex =
-        GTStringPreference(@"SystemMenuColor", @"");
-
     GTExcludedBundleIDs =
         GTStringPreference(@"ExcludedBundleIDs", @"");
 
@@ -3056,10 +2664,6 @@ static void GTRegisterPreferences(void) {
         @"DebugInjectionBorder": @NO,
         @"ForceResolvedBlue": @NO,
         @"ElementInspector": @NO,
-        @"EnableSystemUI": @NO,
-        @"EnableControlCenter": @YES,
-        @"EnableLockScreen": @YES,
-        @"EnableSystemMenus": @YES,
         @"ApplySwitch": @YES,
         @"ApplySlider": @YES,
         @"ApplyProgress": @YES,
@@ -3083,10 +2687,6 @@ static void GTRegisterPreferences(void) {
         @"TabBarColor": @"",
         @"ToolbarColor": @"",
         @"SearchBarColor": @"",
-        @"SystemAccentColor": @"",
-        @"ControlCenterColor": @"",
-        @"LockScreenColor": @"",
-        @"SystemMenuColor": @"",
         @"ExcludedBundleIDs": @"",
         @"AppColorOverrides": @{},
         @"AppComponentColorOverrides": @{},
@@ -3114,6 +2714,16 @@ static void GTRegisterPreferences(void) {
             NSBundle.mainBundle.bundleURL.pathExtension.lowercaseString;
 
         if ([bundleExtension isEqualToString:@"appex"]) {
+            return;
+        }
+
+        // V0.4.1 emergency safety guard:
+        // GlobalTint must not initialize inside SpringBoard.
+        NSString *processBundleID =
+            NSBundle.mainBundle.bundleIdentifier.lowercaseString;
+
+        if ([processBundleID
+             isEqualToString:@"com.apple.springboard"]) {
             return;
         }
 
