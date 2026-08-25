@@ -1,5 +1,17 @@
 # GlobalTint Changelog
 
+## 0.2.18
+
+- Replaced the restrictive UIKit/Class Substrate filter with the classic
+  broad-match `com.apple.Security` bundle filter.
+- Relaxin/RootHide App List now remains the primary control over which app
+  processes receive tweak injection.
+- Added a runtime `%ctor` guard: GlobalTint initializes only when the
+  `UIApplication` Objective-C class is present.
+- App extensions remain excluded.
+- This change targets the observed issue where other tweaks loaded in normal
+  apps while GlobalTint only loaded in Settings/Sileo/Filza.
+
 ## 0.2.17
 
 - Changed the MobileSubstrate injection filter after testing showed that

@@ -2558,11 +2558,20 @@ static void GTRegisterPreferences(void) {
 
 %ctor {
     @autoreleasepool {
-        // Keep app extensions out of V0.2 as well.
+        // Keep app extensions out.
         NSString *bundleExtension =
             NSBundle.mainBundle.bundleURL.pathExtension.lowercaseString;
 
         if ([bundleExtension isEqualToString:@"appex"]) {
+            return;
+        }
+
+        // V0.2.18 uses the broad com.apple.Security Substrate filter so
+        // Relaxin's App List decides which processes are injected. Refuse to
+        // initialize GlobalTint in non-UIKit daemon/tool processes.
+        Class applicationClass = objc_getClass("UIApplication");
+
+        if (!applicationClass) {
             return;
         }
 

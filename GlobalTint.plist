@@ -6,15 +6,7 @@
 	<dict>
 		<key>Bundles</key>
 		<array>
-			<string>com.apple.UIKit</string>
-			<string>com.apple.AppStore</string>
-			<string>com.apple.mobilesafari</string>
-			<string>com.apple.Preferences</string>
-			<string>com.apple.springboard</string>
-		</array>
-		<key>Classes</key>
-		<array>
-			<string>UIApplication</string>
+			<string>com.apple.Security</string>
 		</array>
 	</dict>
 </dict>
