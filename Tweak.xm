@@ -834,15 +834,57 @@ static void GTProcessInspectorEvent(UIEvent *event) {
     }
 }
 
-static BOOL GTInspectorCanAttachToWindow(UIWindow *window) {
+@interface GTInspectorOverlayWindow : UIWindow
+@property (nonatomic, weak) UIWindow *gtSourceWindow;
+@property (nonatomic, strong) UIButton *gtButton;
+@property (nonatomic, strong) UIView *gtCaptureView;
+@property (nonatomic, assign) BOOL gtCaptureActive;
+@end
+
+@implementation GTInspectorOverlayWindow
+
+- (UIView *)hitTest:(CGPoint)point withEvent:(UIEvent *)event {
+    if (self.hidden ||
+        self.alpha <= 0.01 ||
+        !self.userInteractionEnabled) {
+        return nil;
+    }
+
+    UIView *hit = [super hitTest:point withEvent:event];
+
+    if (self.gtCaptureActive) {
+        return hit;
+    }
+
+    // When not inspecting, this extra window must be completely transparent
+    // to the app except for the small GT button.
+    if (hit == self.gtButton ||
+        [hit isDescendantOfView:self.gtButton]) {
+        return hit;
+    }
+
+    return nil;
+}
+
+@end
+
+static NSMapTable<UIWindowScene *, GTInspectorOverlayWindow *>
+    *GTInspectorWindowsByScene = nil;
+
+static BOOL GTInspectorCanUseSourceWindow(UIWindow *window) {
     if (!window ||
         !GTInspectorProcessIsEligible() ||
         !GTInspectorWindowIsEligible(window)) {
         return NO;
     }
 
-    // Only attach the floating inspector to normal app content windows.
-    if (window.windowLevel > UIWindowLevelNormal + 0.5) {
+    if ([window isKindOfClass:[GTInspectorOverlayWindow class]]) {
+        return NO;
+    }
+
+    // Accept normal app windows even if the system uses a small non-zero
+    // windowLevel internally. Reject obvious overlays/alerts.
+    if (window.windowLevel >= UIWindowLevelAlert) {
         return NO;
     }
 
@@ -851,54 +893,89 @@ static BOOL GTInspectorCanAttachToWindow(UIWindow *window) {
         return NO;
     }
 
+    if (!window.windowScene) {
+        return NO;
+    }
+
     return YES;
 }
 
-static void GTRemoveInspectorOverlay(UIWindow *window) {
-    if (!window) {
-        return;
+static UIWindow *GTInspectorBestSourceWindow(UIWindowScene *scene) {
+    if (!scene) {
+        return nil;
     }
 
-    UIView *overlay =
-        objc_getAssociatedObject(window, &GTInspectorOverlayKey);
+    UIWindow *keyCandidate = nil;
+    UIWindow *fallback = nil;
 
-    if (overlay) {
-        [overlay removeFromSuperview];
+    for (UIWindow *window in scene.windows) {
+        if (!GTInspectorCanUseSourceWindow(window)) {
+            continue;
+        }
 
-        objc_setAssociatedObject(
-            window,
-            &GTInspectorOverlayKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
+        if (window.isKeyWindow) {
+            keyCandidate = window;
+            break;
+        }
+
+        if (!fallback ||
+            window.windowLevel < fallback.windowLevel) {
+            fallback = window;
+        }
     }
+
+    return keyCandidate ?: fallback;
 }
 
-@interface UIApplication (GlobalTintFloatingInspector)
-- (void)gt_floatingInspectorButtonTapped:(UIButton *)sender;
-- (void)gt_floatingInspectorOverlayTapped:(UITapGestureRecognizer *)gesture;
-@end
-
-@implementation UIApplication (GlobalTintFloatingInspector)
-
-- (void)gt_floatingInspectorButtonTapped:(UIButton *)sender {
-    UIWindow *window = sender.window;
-
-    if (!GTInspectorCanAttachToWindow(window)) {
+static void GTRemoveInspectorCapture(GTInspectorOverlayWindow *overlayWindow) {
+    if (!overlayWindow) {
         return;
     }
 
-    GTRemoveInspectorOverlay(window);
+    if (overlayWindow.gtCaptureView) {
+        [overlayWindow.gtCaptureView removeFromSuperview];
+        overlayWindow.gtCaptureView = nil;
+    }
 
-    UIView *overlay =
-        [[UIView alloc] initWithFrame:window.bounds];
+    overlayWindow.gtCaptureActive = NO;
+    overlayWindow.gtButton.hidden = NO;
+}
 
-    overlay.autoresizingMask =
+@interface UIApplication (GlobalTintSceneInspector)
+- (void)gt_sceneInspectorButtonTapped:(UIButton *)sender;
+- (void)gt_sceneInspectorCaptureTapped:(UITapGestureRecognizer *)gesture;
+@end
+
+@implementation UIApplication (GlobalTintSceneInspector)
+
+- (void)gt_sceneInspectorButtonTapped:(UIButton *)sender {
+    GTInspectorOverlayWindow *overlayWindow =
+        (GTInspectorOverlayWindow *)sender.window;
+
+    if (![overlayWindow isKindOfClass:[GTInspectorOverlayWindow class]]) {
+        return;
+    }
+
+    UIWindow *sourceWindow =
+        GTInspectorBestSourceWindow(overlayWindow.windowScene);
+
+    if (!sourceWindow) {
+        return;
+    }
+
+    overlayWindow.gtSourceWindow = sourceWindow;
+
+    GTRemoveInspectorCapture(overlayWindow);
+
+    UIView *capture =
+        [[UIView alloc] initWithFrame:overlayWindow.bounds];
+
+    capture.autoresizingMask =
         UIViewAutoresizingFlexibleWidth |
         UIViewAutoresizingFlexibleHeight;
 
-    overlay.backgroundColor =
-        [UIColor colorWithWhite:0.0 alpha:0.06];
+    capture.backgroundColor =
+        [UIColor colorWithWhite:0.0 alpha:0.055];
 
     UILabel *hint =
         [[UILabel alloc] initWithFrame:CGRectZero];
@@ -907,7 +984,7 @@ static void GTRemoveInspectorOverlay(UIWindow *window) {
     hint.textAlignment = NSTextAlignmentCenter;
     hint.textColor = UIColor.whiteColor;
     hint.backgroundColor =
-        [UIColor colorWithWhite:0.0 alpha:0.72];
+        [UIColor colorWithWhite:0.0 alpha:0.76];
 
     hint.font =
         [UIFont systemFontOfSize:14.0
@@ -916,100 +993,135 @@ static void GTRemoveInspectorOverlay(UIWindow *window) {
     hint.layer.cornerRadius = 12.0;
     hint.layer.masksToBounds = YES;
 
-    CGFloat width =
-        MIN(window.bounds.size.width - 40.0, 220.0);
+    CGFloat hintWidth =
+        MIN(overlayWindow.bounds.size.width - 40.0, 220.0);
 
-    CGFloat y =
-        MAX(window.safeAreaInsets.top + 12.0, 18.0);
+    CGFloat hintY =
+        MAX(overlayWindow.safeAreaInsets.top + 12.0, 18.0);
 
     hint.frame =
-        CGRectMake((window.bounds.size.width - width) / 2.0,
-                   y,
-                   width,
-                   38.0);
+        CGRectMake(
+            (overlayWindow.bounds.size.width - hintWidth) / 2.0,
+            hintY,
+            hintWidth,
+            38.0
+        );
 
     hint.autoresizingMask =
         UIViewAutoresizingFlexibleLeftMargin |
         UIViewAutoresizingFlexibleRightMargin |
         UIViewAutoresizingFlexibleBottomMargin;
 
-    [overlay addSubview:hint];
+    [capture addSubview:hint];
 
     UITapGestureRecognizer *tap =
         [[UITapGestureRecognizer alloc]
          initWithTarget:self
-         action:@selector(gt_floatingInspectorOverlayTapped:)];
+         action:@selector(gt_sceneInspectorCaptureTapped:)];
 
-    tap.numberOfTapsRequired = 1;
     tap.cancelsTouchesInView = YES;
+    [capture addGestureRecognizer:tap];
 
-    [overlay addGestureRecognizer:tap];
-    [window addSubview:overlay];
+    overlayWindow.gtCaptureView = capture;
+    overlayWindow.gtCaptureActive = YES;
+    overlayWindow.gtButton.hidden = YES;
 
-    objc_setAssociatedObject(
-        window,
-        &GTInspectorOverlayKey,
-        overlay,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    );
+    [overlayWindow.rootViewController.view addSubview:capture];
 }
 
-- (void)gt_floatingInspectorOverlayTapped:
+- (void)gt_sceneInspectorCaptureTapped:
     (UITapGestureRecognizer *)gesture {
 
     if (gesture.state != UIGestureRecognizerStateEnded) {
         return;
     }
 
-    UIView *overlay = gesture.view;
-    UIWindow *window = overlay.window;
+    UIView *capture = gesture.view;
+    GTInspectorOverlayWindow *overlayWindow =
+        (GTInspectorOverlayWindow *)capture.window;
 
-    if (!window) {
+    if (![overlayWindow isKindOfClass:[GTInspectorOverlayWindow class]]) {
         return;
     }
 
-    CGPoint point = [gesture locationInView:window];
+    CGPoint screenPoint =
+        [gesture locationInView:overlayWindow];
 
-    // Remove the transparent capture layer first, then ask the actual app
-    // window which original UI view exists at the same point.
-    GTRemoveInspectorOverlay(window);
+    UIWindow *sourceWindow = overlayWindow.gtSourceWindow;
+
+    if (!GTInspectorCanUseSourceWindow(sourceWindow)) {
+        sourceWindow =
+            GTInspectorBestSourceWindow(overlayWindow.windowScene);
+    }
+
+    // Remove the capture layer/window interception before asking the real
+    // application window which view is underneath this exact point.
+    GTRemoveInspectorCapture(overlayWindow);
+
+    if (!sourceWindow) {
+        return;
+    }
+
+    CGPoint sourcePoint =
+        [overlayWindow convertPoint:screenPoint
+                           toWindow:sourceWindow];
 
     dispatch_async(dispatch_get_main_queue(), ^{
         UIView *hitView =
-            [window hitTest:point withEvent:nil];
+            [sourceWindow hitTest:sourcePoint withEvent:nil];
 
         if (!GTInspectorViewIsEligible(hitView)) {
             return;
         }
 
-        GTInspectorPresent(window, hitView);
+        GTInspectorPresent(sourceWindow, hitView);
     });
 }
 
 @end
 
-static void GTUpdateFloatingInspector(UIWindow *window) {
-    if (!window) {
-        return;
+static GTInspectorOverlayWindow *
+GTInspectorWindowForScene(UIWindowScene *scene, BOOL createIfNeeded) {
+    if (!scene) {
+        return nil;
     }
 
-    UIButton *button =
-        objc_getAssociatedObject(window, &GTInspectorButtonKey);
+    if (!GTInspectorWindowsByScene) {
+        GTInspectorWindowsByScene =
+            [NSMapTable weakToStrongObjectsMapTable];
+    }
 
-    BOOL shouldShow =
-        GTElementInspector &&
-        GTShouldApplyBase() &&
-        GTInspectorCanAttachToWindow(window);
+    GTInspectorOverlayWindow *overlayWindow =
+        [GTInspectorWindowsByScene objectForKey:scene];
 
-    if (shouldShow && !button) {
-        button = [UIButton buttonWithType:UIButtonTypeSystem];
+    if (!overlayWindow && createIfNeeded) {
+        overlayWindow =
+            [[GTInspectorOverlayWindow alloc]
+             initWithWindowScene:scene];
 
-        button.frame = CGRectMake(
-            MAX(10.0, window.bounds.size.width - 58.0),
-            MAX(window.safeAreaInsets.top + 8.0, 16.0),
-            44.0,
-            44.0
-        );
+        overlayWindow.frame = scene.coordinateSpace.bounds;
+        overlayWindow.backgroundColor = UIColor.clearColor;
+
+        // High enough to remain above dynamic App Store/Safari content,
+        // but below the very high system alert range.
+        overlayWindow.windowLevel = UIWindowLevelAlert - 1.0;
+
+        UIViewController *rootController =
+            [[UIViewController alloc] init];
+
+        rootController.view.backgroundColor = UIColor.clearColor;
+        overlayWindow.rootViewController = rootController;
+
+        UIButton *button =
+            [UIButton buttonWithType:UIButtonTypeSystem];
+
+        button.frame =
+            CGRectMake(
+                MAX(10.0, overlayWindow.bounds.size.width - 58.0),
+                MAX(overlayWindow.safeAreaInsets.top + 8.0, 16.0),
+                44.0,
+                44.0
+            );
 
         button.autoresizingMask =
             UIViewAutoresizingFlexibleLeftMargin |
@@ -1029,43 +1141,75 @@ static void GTUpdateFloatingInspector(UIWindow *window) {
             [UIColor colorWithRed:0.82
                            green:0.12
                             blue:0.95
-                           alpha:0.88];
+                           alpha:0.92];
 
         button.layer.cornerRadius = 22.0;
         button.layer.borderWidth = 1.0;
         button.layer.borderColor =
-            [UIColor colorWithWhite:1.0 alpha:0.60].CGColor;
+            [UIColor colorWithWhite:1.0 alpha:0.65].CGColor;
 
-        button.layer.shadowOpacity = 0.22;
-        button.layer.shadowRadius = 5.0;
+        button.layer.shadowOpacity = 0.25;
+        button.layer.shadowRadius = 6.0;
         button.layer.shadowOffset = CGSizeMake(0.0, 2.0);
 
         [button addTarget:UIApplication.sharedApplication
-                   action:@selector(gt_floatingInspectorButtonTapped:)
+                   action:@selector(gt_sceneInspectorButtonTapped:)
          forControlEvents:UIControlEventTouchUpInside];
 
-        [window addSubview:button];
+        [rootController.view addSubview:button];
 
-        objc_setAssociatedObject(
-            window,
-            &GTInspectorButtonKey,
-            button,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-    } else if (!shouldShow && button) {
-        [button removeFromSuperview];
+        overlayWindow.gtButton = button;
+        overlayWindow.gtCaptureActive = NO;
 
-        objc_setAssociatedObject(
-            window,
-            &GTInspectorButtonKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
+        [GTInspectorWindowsByScene setObject:overlayWindow
+                                      forKey:scene];
+    }
 
-        GTRemoveInspectorOverlay(window);
-    } else if (shouldShow && button) {
-        // Keep the inspector above newly added app content.
-        [window bringSubviewToFront:button];
+    return overlayWindow;
+}
+
+static void GTUpdateSceneInspectorForSourceWindow(UIWindow *sourceWindow) {
+    if (!sourceWindow ||
+        [sourceWindow isKindOfClass:[GTInspectorOverlayWindow class]]) {
+        return;
+    }
+
+    UIWindowScene *scene = sourceWindow.windowScene;
+
+    if (!scene) {
+        return;
+    }
+
+    BOOL shouldShow =
+        GTElementInspector &&
+        GTShouldApplyBase() &&
+        GTInspectorProcessIsEligible();
+
+    GTInspectorOverlayWindow *overlayWindow =
+        GTInspectorWindowForScene(scene, shouldShow);
+
+    if (!overlayWindow) {
+        return;
+    }
+
+    if (shouldShow) {
+        if (GTInspectorCanUseSourceWindow(sourceWindow) &&
+            (sourceWindow.isKeyWindow ||
+             !GTInspectorCanUseSourceWindow(overlayWindow.gtSourceWindow))) {
+            overlayWindow.gtSourceWindow = sourceWindow;
+        }
+
+        overlayWindow.frame = scene.coordinateSpace.bounds;
+        overlayWindow.hidden = NO;
+        overlayWindow.alpha = 1.0;
+        overlayWindow.userInteractionEnabled = YES;
+
+        [overlayWindow.rootViewController.view
+            bringSubviewToFront:overlayWindow.gtButton];
+    } else {
+        GTRemoveInspectorCapture(overlayWindow);
+        overlayWindow.hidden = YES;
+        overlayWindow.gtSourceWindow = nil;
     }
 }
 
@@ -1140,10 +1284,14 @@ static void GTApplyDebugBorder(UIWindow *window) {
 }
 
 static void GTApplyWindow(UIWindow *window) {
+    if ([window isKindOfClass:[GTInspectorOverlayWindow class]]) {
+        return;
+    }
+
     BOOL apply = GTShouldApplyBase() && GTEnableWindowTint;
     GTApplyOrRestoreTint(window, apply, GTColorForComponentHex(GTWindowHex));
     GTApplyDebugBorder(window);
-    GTUpdateFloatingInspector(window);
+    GTUpdateSceneInspectorForSourceWindow(window);
 }
 
 static void GTApplySwitchControl(UISwitch *control) {

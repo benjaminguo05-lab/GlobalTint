@@ -1,5 +1,16 @@
 # GlobalTint Changelog
 
+## 0.2.14
+
+- Fixed the floating `GT` inspector button only being visible in Settings.
+- Inspector UI now lives in its own transparent per-`UIWindowScene` window.
+- The inspector window stays above dynamic App Store / Safari content.
+- Outside the `GT` button the inspector window passes touches through to the app.
+- After tapping `GT`, the window temporarily captures one tap, removes the
+  capture layer, then hit-tests the real underlying app window.
+- Inspector overlay windows are excluded from GlobalTint's normal window hooks
+  to avoid recursion.
+
 ## 0.2.13
 
 - Replaced the unreliable long-press/raw-touch inspector workflow with a
