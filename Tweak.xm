@@ -90,6 +90,9 @@ static char GTInspectorStartPointKey;
 static char GTInspectorTokenKey;
 
 static BOOL GTShouldApplyBase(void);
+static BOOL GTInspectorProcessIsEligible(void);
+static BOOL GTInspectorWindowIsEligible(UIWindow *window);
+static BOOL GTInspectorViewIsEligible(UIView *view);
 
 #pragma mark - Color helpers
 

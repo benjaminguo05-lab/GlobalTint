@@ -1,5 +1,14 @@
 # GlobalTint Changelog
 
+## 0.2.11
+
+- Fixed V0.2.10 compile error where `GTInspectorViewIsEligible` was referenced before declaration.
+- Added forward declarations for all three inspector eligibility helpers:
+  - `GTInspectorProcessIsEligible`
+  - `GTInspectorWindowIsEligible`
+  - `GTInspectorViewIsEligible`
+- No runtime behavior changes from V0.2.10.
+
 ## 0.2.10
 
 - Fixed UI Inspector reporting SpringBoard's `UISystemGestureView`.
