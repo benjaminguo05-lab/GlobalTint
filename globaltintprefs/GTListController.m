@@ -1643,32 +1643,32 @@ appComponentSwitchOverrides {
 - (NSDictionary<NSString *, NSString *> *)appComponentSwitchNames {
     return @{
         @"Window": @"应用整体强调色",
-        @"开关按钮": @"开关按钮",
-        @"滑动条 / 音量进度条": @"滑动条 / 音量进度条",
-        @"进度条": @"进度条",
+        @"Switch": @"开关按钮",
+        @"Slider": @"滑动条 / 音量进度条",
+        @"Progress": @"进度条",
         @"Segmented": @"分段选择按钮",
-        @"页面圆点指示器": @"页面圆点指示器",
-        @"下拉刷新指示器": @"下拉刷新指示器",
-        @"顶部导航栏": @"顶部导航栏",
-        @"底部标签栏": @"底部标签栏",
-        @"工具栏": @"工具栏",
-        @"搜索栏": @"搜索栏"
+        @"PageControl": @"页面圆点指示器",
+        @"RefreshControl": @"下拉刷新指示器",
+        @"NavigationBar": @"顶部导航栏",
+        @"TabBar": @"底部标签栏",
+        @"Toolbar": @"工具栏",
+        @"SearchBar": @"搜索栏"
     };
 }
 
 - (NSArray<NSString *> *)orderedAppComponentSwitchKeys {
     return @[
         @"Window",
-        @"开关按钮",
-        @"滑动条 / 音量进度条",
-        @"进度条",
+        @"Switch",
+        @"Slider",
+        @"Progress",
         @"Segmented",
-        @"页面圆点指示器",
-        @"下拉刷新指示器",
-        @"顶部导航栏",
-        @"底部标签栏",
-        @"工具栏",
-        @"搜索栏"
+        @"PageControl",
+        @"RefreshControl",
+        @"NavigationBar",
+        @"TabBar",
+        @"Toolbar",
+        @"SearchBar"
     ];
 }
 
