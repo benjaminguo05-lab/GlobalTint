@@ -1,24 +1,49 @@
-# GlobalTint
+# GlobalTint 0.4.7 — RootHide / iOS 17
 
-A conservative V0.1 UIKit global accent/tint tweak for **Relaxin / RootHide**.
+GlobalTint is an **app-only** UIKit color tweak for Relaxin / RootHide. Version 0.4.7 keeps the hard SpringBoard quarantine introduced in 0.4.2 and upgrades the existing blue-compatibility path into a multi-layer color interception engine.
 
-## What V0.1 changes
+## Safety boundary
 
-- `UIWindow.tintColor`
-- `UISwitch.onTintColor`
-- `UISlider.minimumTrackTintColor`
-- `UIProgressView.progressTintColor`
-- `UISegmentedControl.selectedSegmentTintColor`
-- `UIPageControl.currentPageIndicatorTintColor`
-- `UIRefreshControl.tintColor`
-- `UINavigationBar.tintColor`
-- `UITabBar.tintColor`
-- `UIToolbar.tintColor`
-- `UISearchBar.tintColor`
+The package is split into two dylibs:
 
-It intentionally does **not** replace `+[UIColor systemBlueColor]`, semantic text colors,
-background colors, or SwiftUI internals. That is planned for later versions because those
-hooks have a much larger compatibility surface.
+- `GlobalTintLoader.dylib`: tiny C loader. It rejects SpringBoard, `.appex` processes and non-`.app` processes before loading the UIKit core.
+- `GlobalTintCore.dylib`: UIKit / Logos implementation. Its MobileLoader filter is intentionally impossible and it is only `dlopen`'d by the loader inside eligible full apps.
+
+The core constructor checks SpringBoard again before preferences or hooks are initialized. **0.4.7 still does not support SpringBoard/System UI.**
+
+## Existing 0.4.6 features retained
+
+- Global accent color
+- Per-App accent colors
+- Per-App exclusions
+- Per-component enable/disable rules
+- Per-component colors
+- Switch / slider / progress / segmented / page indicator / refresh control colors
+- Navigation bar / tab bar / toolbar / search bar colors
+- Tab-bar notification badge background and number colors
+- Local configuration save / restore / delete
+- Floating `GT` UI inspector
+
+## 0.4.7 multi-layer blue engine
+
+The existing preference key `ForceResolvedBlue` is retained so 0.4.6 backups remain compatible. In Settings it is shown as **“多层蓝色改色增强”**.
+
+When enabled, colors close to the Apple/system-blue family are intercepted at several stages:
+
+1. `+[UIColor systemBlueColor]`
+2. `-[UIColor resolvedColorWithTraitCollection:]`
+3. Private dynamic UIColor subclasses such as `UIDynamicColor`, `UIDynamicCatalogSystemColor`, `UIDeviceRGBColor`, and `UICGColor`
+4. Dynamic UIColor `CGColor`
+5. `-[UIView setTintColor:]`
+6. `-[UIView setBackgroundColor:]`
+7. `-[UILabel setTextColor:]`
+8. `-[CALayer setBackgroundColor:]`
+
+The matcher uses tolerant RGBA comparisons (rather than exact equality) plus a conservative blue hue/saturation fallback. Semantic red/green/orange/yellow are deliberately left untouched in 0.4.7.
+
+UIColor/CGColor conversion has a thread-local re-entry guard so obtaining a replacement `CGColor` cannot recursively enter the same hook forever. Original view/layer background colors are remembered and restored when the enhanced engine is disabled.
+
+Colors explicitly configured by GlobalTint (global, per-App, or per-component) are excluded from the generic re-processing path so a user-selected blue output is not unexpectedly recolored again.
 
 ## Environment
 
@@ -27,304 +52,48 @@ Designed for:
 - Relaxin jailbreak
 - RootHide architecture
 - iOS 17.x
-- arm64e devices such as iPhone 15 Pro / Pro Max
+- arm64 / arm64e, including iPhone 15 Pro / Pro Max
 
-## 1. Install RootHide Theos
-
-On macOS:
-
-```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/roothide/theos/master/bin/install-theos)"
-```
-
-Set `THEOS` if your shell does not already have it:
-
-```bash
-export THEOS="$HOME/theos"
-```
-
-## 2. Device dependencies
-
-Install these from Sileo before installing GlobalTint:
+Device packages required:
 
 - PreferenceLoader
 - Cephei (`ws.hbang.common`, RootHide build)
-- MobileSubstrate-compatible tweak loader provided by the RootHide environment
+- libSandy (`com.opa334.libsandy`)
+- RootHide-compatible MobileSubstrate / tweak loader
 
-The settings page uses iOS 17's native `UIColorPickerViewController`, so Alderis is not required.
+## Build
 
-## 3. Build
-
-From the project directory:
+Use RootHide Theos:
 
 ```bash
+export THEOS="$HOME/theos"
 make clean
 make package FINALPACKAGE=1
 ```
 
-The package will appear under:
+The resulting package is under `packages/` and uses architecture `iphoneos-arm64e`.
+
+## Install / test
+
+Install the `.deb` with Sileo, then open:
 
 ```text
-packages/
+设置 -> Global Tint
 ```
 
-and should be an `iphoneos-arm64e` `.deb`.
+RootHide / Relaxin does not inject ordinary third-party Apps automatically. Enable tweak injection for the Apps you want to test in the jailbreak App List.
 
-## 4. Install
-
-Transfer the `.deb` to the iPhone and open it with Sileo, or use your normal RootHide
-package-install workflow.
-
-After installation, reopen Settings and enter:
-
-```text
-Settings -> Global Tint
-```
-
-## 5. Third-party apps
-
-RootHide does not inject tweaks into third-party apps by default.
-
-Open the RootHide / Relaxin bootstrap App List and enable tweak injection only for the
-apps you want to test. Start with Settings / Safari and then enable third-party apps one
-at a time.
-
-## 6. Recommended first test
-
-Use a visible color such as:
-
-```text
-#92C5C6
-```
-
-Test in this order:
+Recommended first test order:
 
 1. Settings
 2. Safari
 3. App Store
-4. SpringBoard
-5. One third-party app
+4. One third-party App
 
-Check:
+Do **not** use SpringBoard as a test target; the loader intentionally refuses it.
 
-- navigation buttons
-- tab bar selected item
-- switches
-- sliders
-- segmented controls
-- links / template-image tint that inherit from the window
+For ordinary components, leave **“多层蓝色改色增强”** off first. Turn it on only when a page still contains fixed system-blue / resolved-blue elements that the normal component rules miss. If one App behaves abnormally, disable the option or exclude that App.
 
-## 7. Important limitation
+## RootHide path rule
 
-V0.1 is UIKit-focused.
-
-SwiftUI views that explicitly use:
-
-```swift
-.tint(...)
-.foregroundStyle(...)
-```
-
-may not follow `UIWindow.tintColor`.
-
-Likewise, Apple private SpringBoard / Control Center components may use their own
-semantic colors and will need dedicated iOS 17 hooks in a later module.
-
-## 8. Recovery if a tweak causes UI instability
-
-Because Relaxin is semi-untethered, a normal reboot returns the device to a non-jailbroken
-state until the jailbreak is run again. Keep testing conservative hooks first, and only
-then add private SpringBoard classes.
-
-Do not hard-code `/var/jb` paths in future RootHide modules. If a future version needs
-to access jailbreak files, use RootHide's `jbroot(...)` API.
-
-## Project layout
-
-```text
-GlobalTint/
-├── Makefile
-├── control
-├── GlobalTint.plist
-├── Tweak.xm
-├── README.md
-├── globaltintprefs/
-│   ├── Makefile
-│   ├── GTListController.h
-│   ├── GTListController.m
-│   └── Resources/
-│       ├── Info.plist
-│       └── Root.plist
-└── layout/
-    └── Library/
-        └── PreferenceLoader/
-            └── Preferences/
-                └── GlobalTint.plist
-```
-
-## Next modules
-
-Recommended order:
-
-1. V0.2 - per-app exclusions and per-component switches
-2. V0.3 - dedicated SpringBoard accent hooks
-3. V0.4 - Control Center / Lock Screen
-4. V0.5 - selected semantic system colors
-5. V0.6 - SwiftUI investigation / bridge handling
-
-
-
-## No macOS? Build on GitHub Actions
-
-For arm64e system-process tweaks, using a macOS GitHub Actions runner is the easiest
-option if your development computer is Windows.
-
-This project includes:
-
-```text
-.github/workflows/build.yml
-```
-
-### Steps
-
-1. Create a GitHub repository.
-2. Upload the **contents of the `GlobalTint` folder** to the repository root.
-3. Open the repository's **Actions** tab.
-4. Select **Build GlobalTint**.
-5. Click **Run workflow**.
-6. When the run finishes, open the run and download the artifact named:
-   `GlobalTint-RootHide`.
-7. Extract the artifact ZIP. Inside is the compiled `.deb`.
-8. Send the `.deb` to the iPhone and install it with Sileo.
-
-Every push to `main` or `master` also triggers a build automatically.
-
-If the workflow fails, copy the complete output of the red **Build RootHide package**
-step and send it back for diagnosis.
-
-
-## V0.2
-
-V0.2 adds three major features:
-
-### 1. App exclusions
-
-In Settings -> Global Tint -> App 排除, enter bundle identifiers separated by commas.
-
-Examples:
-
-```text
-com.tencent.xin, com.apple.mobilesafari
-```
-
-When the current process bundle identifier is in this list, GlobalTint restores any
-remembered colors it changed and stops applying its UIKit tint rules in that process.
-
-This exclusion is separate from RootHide's App List: the app still needs tweak injection
-enabled before GlobalTint can run there at all.
-
-### 2. Per-component enable switches
-
-V0.2 has independent switches for Window Tint, Switch, Slider, ProgressView,
-SegmentedControl, PageControl, RefreshControl, NavigationBar, TabBar, Toolbar and
-SearchBar.
-
-`ApplyControls` and `ApplyBars` remain as master switches for compatibility with V0.1.x.
-
-### 3. Per-component colors
-
-Keep `启用组件独立颜色` off to make every component follow the main accent color.
-
-Turn it on to use individual component colors. A component whose individual color has
-not been set still follows the main accent color.
-
-Use `清除全部组件独立颜色` to return every component to main-color inheritance.
-
-### Upgrade
-
-V0.2 can be installed over V0.1.6. Existing `Enabled`, `AccentColor`,
-`ApplyWindowTint`, `ApplyControls`, and `ApplyBars` preferences are retained.
-
-
-## V0.3.0
-
-V0.3.0 adds per-App accent profiles. A Bundle ID can be assigned its own accent
-color while all Apps without a profile continue to use the global accent.
-Explicit per-component colors still take priority when separate component
-colors are enabled.
-
-
-## V0.3.1
-
-V0.3.1 adds per-App component color rules. When separate component colors are
-enabled, a matching per-App component rule overrides the global component
-color, then falls back to the App accent and finally the global accent.
-
-
-## V0.3.2
-
-V0.3.2 adds per-App component enable/disable rules. A matching App rule can
-override an individual global component switch, while the Controls/Bars master
-switches remain group-level hard gates. Choosing “follow global” removes the
-per-App rule for that component.
-
-
-## V0.3.3
-
-V0.3.3 adds an installed-App configuration manager in Settings. Select an App
-from LaunchServices and edit that App's exclusion state, accent color,
-component colors, and tri-state component enable rules from one page. Manual
-Bundle ID tools remain available as a fallback.
-
-
-## V0.3.4
-
-V0.3.4 improves the installed-App manager with real App icons, a persistent
-name/Bundle-ID search bar, configured-first sorting, compact configuration
-status text, and an icon header on each App detail page. The tweak runtime and
-color precedence are unchanged.
-
-
-## V0.3.5
-
-Compile fix for the V0.3.4 App-detail Preferences controller. The `-specifiers`
-method boundary is restored; no tweak runtime or tint behavior changed.
-
-
-## V0.4.2
-
-V0.4.2 introduces a hard SpringBoard quarantine. A tiny pure-C loader is the
-only GlobalTint image MobileLoader may load broadly. The UIKit/Logos core has
-an impossible substrate filter and is manually loaded only when the current
-executable is a full `.app`, is not an `.appex`, and is not SpringBoard.
-System UI support is intentionally disabled while this app-only architecture
-is validated.
-
-
-## V0.4.3
-
-Settings terminology cleanup. UIKit class names are replaced with user-friendly
-Chinese descriptions of the actual UI area being recolored. Runtime behavior
-and the V0.4.2 hard SpringBoard quarantine are unchanged.
-
-
-## V0.4.4
-
-The main Settings page and manual configuration dialogs are now localized with
-plain Chinese names that describe the actual UI area being changed. Technical
-preference keys and the V0.4.2 hard SpringBoard quarantine remain unchanged.
-
-
-## V0.4.5
-
-Localization hotfix. Per-App component switch identifiers remain internal
-English keys while all user-facing names stay Chinese. App detail wording is
-also fully localized. Runtime and SpringBoard quarantine are unchanged.
-
-
-## V0.4.6
-
-Adds ordinary-App tab bar notification badge background/text colors, including
-global settings, per-App colors, and a per-App tri-state badge switch. Also
-adds a local full-configuration backup/restore feature. SpringBoard remains
-hard-quarantined and is not modified.
+Do not hard-code `/var/jb`. Runtime access to jailbreak paths must continue to use RootHide-compatible APIs such as `jbroot(...)` where needed.

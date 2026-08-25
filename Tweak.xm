@@ -1,6 +1,8 @@
 #import <UIKit/UIKit.h>
 #include <roothide.h>
 #include <dlfcn.h>
+#include <math.h>
+#include <substrate.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <QuartzCore/QuartzCore.h>
@@ -96,6 +98,13 @@ static char GTOriginalWindowBorderWidthKey;
 static char GTOriginalWindowBorderColorKey;
 static char GTOriginalResolvedTintKey;
 static char GTOriginalResolvedTextColorKey;
+static char GTOriginalResolvedBackgroundColorKey;
+static char GTOriginalLayerBackgroundColorKey;
+
+// Re-entrancy guard used by the multi-layer color engine. Some replacement
+// paths convert UIColor <-> CGColor, which can re-enter our own hooks.
+static __thread NSUInteger GTColorEngineBypassDepth = 0;
+static BOOL GTColorEngineHasLayerState = NO;
 
 static BOOL GTShouldApplyBase(void);
 static BOOL GTInspectorProcessIsEligible(void);
@@ -384,31 +393,228 @@ static BOOL GTExtractRGBA(UIColor *color,
     return NO;
 }
 
-// Conservative detector for Apple's common light/dark system blue family.
-// #007AFF and #0A84FF both match. Brand blues that are far away do not.
-static BOOL GTLooksLikeResolvedSystemBlue(UIColor *color) {
-    CGFloat r = 0.0;
-    CGFloat g = 0.0;
-    CGFloat b = 0.0;
-    CGFloat a = 0.0;
+static BOOL GTExtractCGColorRGBA(CGColorRef color,
+                                 CGFloat *red,
+                                 CGFloat *green,
+                                 CGFloat *blue,
+                                 CGFloat *alpha) {
+    if (!color) {
+        return NO;
+    }
+
+    CGColorSpaceRef colorSpace = CGColorGetColorSpace(color);
+    CGColorSpaceModel model = colorSpace
+        ? CGColorSpaceGetModel(colorSpace)
+        : kCGColorSpaceModelUnknown;
+
+    size_t count = CGColorGetNumberOfComponents(color);
+    const CGFloat *components = CGColorGetComponents(color);
+
+    if (!components || count == 0) {
+        return NO;
+    }
+
+    CGFloat r = 0.0, g = 0.0, b = 0.0, a = 1.0;
+
+    if (model == kCGColorSpaceModelMonochrome && count >= 2) {
+        r = g = b = components[0];
+        a = components[1];
+    } else if (model == kCGColorSpaceModelRGB && count >= 4) {
+        r = components[0];
+        g = components[1];
+        b = components[2];
+        a = components[count - 1];
+    } else {
+        return NO;
+    }
+
+    if (red) *red = r;
+    if (green) *green = g;
+    if (blue) *blue = b;
+    if (alpha) *alpha = a;
+    return YES;
+}
+
+static UIColor *GTConcreteColorFromCGColor(CGColorRef color) {
+    CGFloat r = 0.0, g = 0.0, b = 0.0, a = 1.0;
+
+    if (!GTExtractCGColorRGBA(color, &r, &g, &b, &a)) {
+        return nil;
+    }
+
+    return [UIColor colorWithRed:r green:g blue:b alpha:a];
+}
+
+// Tolerant color matching, modeled after the analyzed reference tweak.
+// The reference implementation does not require exact RGB equality; it allows
+// small per-channel differences so dynamic/anti-aliased variants still match.
+static BOOL GTColorMatchesRGBA(UIColor *color,
+                               CGFloat targetR,
+                               CGFloat targetG,
+                               CGFloat targetB,
+                               CGFloat targetA,
+                               CGFloat toleranceR,
+                               CGFloat toleranceG,
+                               CGFloat toleranceB,
+                               CGFloat toleranceA) {
+    CGFloat r = 0.0, g = 0.0, b = 0.0, a = 0.0;
 
     if (!GTExtractRGBA(color, &r, &g, &b, &a)) {
         return NO;
     }
 
-    if (a <= 0.01) {
+    return fabs(r - targetR) < toleranceR &&
+           fabs(g - targetG) < toleranceG &&
+           fabs(b - targetB) < toleranceB &&
+           fabs(a - targetA) < toleranceA;
+}
+
+static BOOL GTColorsApproximatelyEqual(UIColor *left,
+                                        UIColor *right,
+                                        CGFloat tolerance) {
+    if (left == right) {
+        return YES;
+    }
+
+    CGFloat lr = 0.0, lg = 0.0, lb = 0.0, la = 0.0;
+    CGFloat rr = 0.0, rg = 0.0, rb = 0.0, ra = 0.0;
+
+    if (!GTExtractRGBA(left, &lr, &lg, &lb, &la) ||
+        !GTExtractRGBA(right, &rr, &rg, &rb, &ra)) {
         return NO;
     }
 
-    BOOL blueDominant =
-        b >= 0.82 &&
-        r <= 0.20 &&
-        g >= 0.32 &&
-        g <= 0.64 &&
-        (b - r) >= 0.62 &&
-        (b - g) >= 0.25;
+    return fabs(lr - rr) <= tolerance &&
+           fabs(lg - rg) <= tolerance &&
+           fabs(lb - rb) <= tolerance &&
+           fabs(la - ra) <= MAX(tolerance, 0.05);
+}
 
-    return blueDominant;
+// Conservative detector for the common Apple/system-blue accent family.
+// It first uses the same tolerance-style matching as the analyzed tweak for
+// #007AFF / #0A84FF, then falls back to a hue/saturation check to catch nearby
+// concrete blues emitted by SwiftUI/private UIKit implementations. Semantic
+// red/green/orange/yellow are deliberately excluded.
+static BOOL GTLooksLikeResolvedSystemBlue(UIColor *color) {
+    if (!color) {
+        return NO;
+    }
+
+    // iOS light system blue: #007AFF
+    if (GTColorMatchesRGBA(color,
+                           0.0,
+                           122.0 / 255.0,
+                           1.0,
+                           1.0,
+                           0.08, 0.07, 0.08, 0.10)) {
+        return YES;
+    }
+
+    // iOS dark system blue: #0A84FF
+    if (GTColorMatchesRGBA(color,
+                           10.0 / 255.0,
+                           132.0 / 255.0,
+                           1.0,
+                           1.0,
+                           0.08, 0.07, 0.08, 0.10)) {
+        return YES;
+    }
+
+    CGFloat r = 0.0, g = 0.0, b = 0.0, a = 0.0;
+
+    if (!GTExtractRGBA(color, &r, &g, &b, &a) || a <= 0.01) {
+        return NO;
+    }
+
+    CGFloat maximum = MAX(r, MAX(g, b));
+    CGFloat minimum = MIN(r, MIN(g, b));
+    CGFloat delta = maximum - minimum;
+
+    if (maximum < 0.32 || delta < 0.16 || b < g || b < r) {
+        return NO;
+    }
+
+    CGFloat saturation = maximum > 0.0 ? delta / maximum : 0.0;
+    if (saturation < 0.42) {
+        return NO;
+    }
+
+    // HSV hue in degrees. We only arrive here when blue is the max channel.
+    CGFloat hue = 60.0 * (((r - g) / delta) + 4.0);
+    if (hue < 0.0) {
+        hue += 360.0;
+    }
+
+    // Cover cyan-blue through Apple-blue/purple-blue, but not teal/green or
+    // broad violet. This is intentionally narrower than "all blue-looking".
+    return hue >= 195.0 && hue <= 232.0;
+}
+
+static BOOL GTColorMatchesConfiguredOutputHex(UIColor *color, NSString *hex) {
+    if (![hex isKindOfClass:[NSString class]] || hex.length == 0) {
+        return NO;
+    }
+
+    UIColor *configured = GTColorFromHexOrNil(hex);
+    return configured && GTColorsApproximatelyEqual(color, configured, 0.025);
+}
+
+// Prevent the generic compatibility engine from re-coloring a color that the
+// user explicitly chose as a GlobalTint output (for example a blue per-control
+// override). The test only runs after the source has already matched the blue
+// family, so its cost stays low in normal UI traffic.
+static BOOL GTColorIsConfiguredGlobalTintOutput(UIColor *color) {
+    if (!color) {
+        return NO;
+    }
+
+    if (GTColorsApproximatelyEqual(color, GTCurrentAppAccentColor(), 0.025) ||
+        GTColorsApproximatelyEqual(color, GTSemanticBlueColor(), 0.025)) {
+        return YES;
+    }
+
+    NSArray<NSString *> *globalHexes = @[
+        GTWindowHex ?: @"",
+        GTSwitchHex ?: @"",
+        GTSliderHex ?: @"",
+        GTProgressHex ?: @"",
+        GTSegmentedHex ?: @"",
+        GTPageControlHex ?: @"",
+        GTRefreshControlHex ?: @"",
+        GTNavigationBarHex ?: @"",
+        GTTabBarHex ?: @"",
+        GTBadgeBackgroundHex ?: @"",
+        GTBadgeTextHex ?: @"",
+        GTToolbarHex ?: @"",
+        GTSearchBarHex ?: @""
+    ];
+
+    for (NSString *hex in globalHexes) {
+        if (GTColorMatchesConfiguredOutputHex(color, hex)) {
+            return YES;
+        }
+    }
+
+    NSString *bundleID = GTCurrentBundleIdentifier();
+    NSString *appAccentHex = GTAppColorOverrides[bundleID];
+
+    if (GTColorMatchesConfiguredOutputHex(color, appAccentHex)) {
+        return YES;
+    }
+
+    NSDictionary<NSString *, NSString *> *componentColors =
+        GTAppComponentColorOverrides[bundleID];
+
+    if ([componentColors isKindOfClass:[NSDictionary class]]) {
+        for (id value in componentColors.allValues) {
+            if ([value isKindOfClass:[NSString class]] &&
+                GTColorMatchesConfiguredOutputHex(color, (NSString *)value)) {
+                return YES;
+            }
+        }
+    }
+
+    return NO;
 }
 
 static UIColor *GTReplacementPreservingAlpha(UIColor *source) {
@@ -430,6 +636,78 @@ static UIColor *GTReplacementPreservingAlpha(UIColor *source) {
                            green:rg
                             blue:rb
                            alpha:(sourceAlpha * ra)];
+}
+
+// Central replacement pipeline used by every new interception layer. Keeping
+// all matching in one function mirrors the reference tweak and prevents the
+// individual hooks from slowly drifting into different behavior.
+static UIColor *GTColorEngineReplaceColor(UIColor *source) {
+    if (!source ||
+        GTColorEngineBypassDepth > 0 ||
+        !GTForceResolvedBlue ||
+        !GTShouldApplyBase()) {
+        return source;
+    }
+
+    if (!GTLooksLikeResolvedSystemBlue(source)) {
+        return source;
+    }
+
+    if (GTColorIsConfiguredGlobalTintOutput(source)) {
+        return source;
+    }
+
+    UIColor *replacement = GTReplacementPreservingAlpha(source);
+
+    if (!replacement ||
+        GTColorsApproximatelyEqual(source, replacement, 0.01)) {
+        return source;
+    }
+
+    return replacement;
+}
+
+static CGColorRef GTColorEngineReplaceCGColor(CGColorRef source) {
+    if (!source ||
+        GTColorEngineBypassDepth > 0 ||
+        !GTForceResolvedBlue ||
+        !GTShouldApplyBase()) {
+        return source;
+    }
+
+    // Do not wrap the source with +colorWithCGColor: here. Some private UIColor
+    // implementations may consult -CGColor while extracting their components,
+    // which would re-enter this hook. Read CoreGraphics components directly and
+    // build a plain RGB UIColor for the shared matcher instead.
+    UIColor *sourceColor = GTConcreteColorFromCGColor(source);
+
+    if (!sourceColor) {
+        return source;
+    }
+
+    UIColor *replacement = GTColorEngineReplaceColor(sourceColor);
+
+    if (!replacement || replacement == sourceColor ||
+        GTColorsApproximatelyEqual(sourceColor, replacement, 0.01)) {
+        return source;
+    }
+
+    GTColorEngineBypassDepth++;
+    CGColorRef replacementCGColor = replacement.CGColor;
+    GTColorEngineBypassDepth--;
+
+    return replacementCGColor ?: source;
+}
+
+static void GTSetLayerBackgroundColorBypassingEngine(CALayer *layer,
+                                                     CGColorRef color) {
+    if (!layer) {
+        return;
+    }
+
+    GTColorEngineBypassDepth++;
+    layer.backgroundColor = color;
+    GTColorEngineBypassDepth--;
 }
 
 static void GTRunOnMain(dispatch_block_t block) {
@@ -2241,37 +2519,45 @@ static void GTApplyResolvedBlueCompatibilityToView(UIView *view) {
 
     if (active) {
         UIColor *currentTint = view.tintColor;
+        UIColor *replacementTint =
+            GTColorEngineReplaceColor(currentTint);
 
-        if (GTLooksLikeResolvedSystemBlue(currentTint)) {
-            if (!objc_getAssociatedObject(view, &GTOriginalResolvedTintKey)) {
-                objc_setAssociatedObject(
-                    view,
-                    &GTOriginalResolvedTintKey,
-                    currentTint ?: (id)[NSNull null],
-                    OBJC_ASSOCIATION_RETAIN_NONATOMIC
-                );
-            }
+        if (replacementTint && replacementTint != currentTint) {
+            GTRememberColorOnce(
+                view,
+                &GTOriginalResolvedTintKey,
+                currentTint
+            );
+            view.tintColor = replacementTint;
+        }
 
-            view.tintColor = GTReplacementPreservingAlpha(currentTint);
+        UIColor *backgroundColor = view.backgroundColor;
+        UIColor *replacementBackground =
+            GTColorEngineReplaceColor(backgroundColor);
+
+        if (replacementBackground &&
+            replacementBackground != backgroundColor) {
+            GTRememberColorOnce(
+                view,
+                &GTOriginalResolvedBackgroundColorKey,
+                backgroundColor
+            );
+            view.backgroundColor = replacementBackground;
         }
 
         if ([view isKindOfClass:[UILabel class]]) {
             UILabel *label = (UILabel *)view;
             UIColor *textColor = label.textColor;
+            UIColor *replacementText =
+                GTColorEngineReplaceColor(textColor);
 
-            if (GTLooksLikeResolvedSystemBlue(textColor)) {
-                if (!objc_getAssociatedObject(label,
-                                              &GTOriginalResolvedTextColorKey)) {
-                    objc_setAssociatedObject(
-                        label,
-                        &GTOriginalResolvedTextColorKey,
-                        textColor ?: (id)[NSNull null],
-                        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-                    );
-                }
-
-                label.textColor =
-                    GTReplacementPreservingAlpha(textColor);
+            if (replacementText && replacementText != textColor) {
+                GTRememberColorOnce(
+                    label,
+                    &GTOriginalResolvedTextColorKey,
+                    textColor
+                );
+                label.textColor = replacementText;
             }
         }
     } else {
@@ -2290,12 +2576,34 @@ static void GTApplyResolvedBlueCompatibilityToView(UIView *view) {
             );
         }
 
+        id background =
+            objc_getAssociatedObject(
+                view,
+                &GTOriginalResolvedBackgroundColorKey
+            );
+
+        if (background) {
+            view.backgroundColor =
+                background == [NSNull null]
+                ? nil
+                : (UIColor *)background;
+
+            objc_setAssociatedObject(
+                view,
+                &GTOriginalResolvedBackgroundColorKey,
+                nil,
+                OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            );
+        }
+
         if ([view isKindOfClass:[UILabel class]]) {
             UILabel *label = (UILabel *)view;
 
             id textColor =
-                objc_getAssociatedObject(label,
-                                         &GTOriginalResolvedTextColorKey);
+                objc_getAssociatedObject(
+                    label,
+                    &GTOriginalResolvedTextColorKey
+                );
 
             if (textColor) {
                 label.textColor =
@@ -2311,6 +2619,75 @@ static void GTApplyResolvedBlueCompatibilityToView(UIView *view) {
                 );
             }
         }
+    }
+}
+
+static void GTApplyResolvedBlueCompatibilityToLayerTree(CALayer *layer) {
+    if (!layer) {
+        return;
+    }
+
+    if (!GTForceResolvedBlue && !GTColorEngineHasLayerState) {
+        return;
+    }
+
+    BOOL active =
+        GTShouldApplyBase() &&
+        GTForceResolvedBlue;
+
+    if (active && layer.backgroundColor) {
+        UIColor *sourceColor =
+            GTConcreteColorFromCGColor(layer.backgroundColor);
+
+        UIColor *replacement =
+            GTColorEngineReplaceColor(sourceColor);
+
+        if (replacement && replacement != sourceColor &&
+            !GTColorsApproximatelyEqual(sourceColor, replacement, 0.01)) {
+            GTRememberColorOnce(
+                layer,
+                &GTOriginalLayerBackgroundColorKey,
+                sourceColor
+            );
+            GTColorEngineHasLayerState = YES;
+
+            GTColorEngineBypassDepth++;
+            CGColorRef replacementCGColor = replacement.CGColor;
+            GTColorEngineBypassDepth--;
+
+            GTSetLayerBackgroundColorBypassingEngine(
+                layer,
+                replacementCGColor
+            );
+        }
+    } else if (!active &&
+               GTHasRememberedColor(
+                   layer,
+                   &GTOriginalLayerBackgroundColorKey
+               )) {
+        UIColor *original =
+            GTRememberedColor(
+                layer,
+                &GTOriginalLayerBackgroundColorKey
+            );
+
+        GTColorEngineBypassDepth++;
+        CGColorRef originalCGColor = original.CGColor;
+        GTColorEngineBypassDepth--;
+
+        GTSetLayerBackgroundColorBypassingEngine(
+            layer,
+            originalCGColor
+        );
+
+        GTClearRememberedColor(
+            layer,
+            &GTOriginalLayerBackgroundColorKey
+        );
+    }
+
+    for (CALayer *sublayer in layer.sublayers) {
+        GTApplyResolvedBlueCompatibilityToLayerTree(sublayer);
     }
 }
 
@@ -2374,48 +2751,176 @@ static void GTRegisterAndApplyWindow(UIWindow *window) {
     }
 
     [GTWindows addObject:window];
+    GTApplyResolvedBlueCompatibilityToLayerTree(window.layer);
     GTApplyRecursively(window);
 }
 
 static void GTRefreshKnownWindows(void) {
     GTRunOnMain(^{
         for (UIWindow *window in GTWindows.allObjects) {
+            GTApplyResolvedBlueCompatibilityToLayerTree(window.layer);
             GTApplyRecursively(window);
+        }
+
+        if (!GTForceResolvedBlue || !GTShouldApplyBase()) {
+            GTColorEngineHasLayerState = NO;
         }
     });
 }
+
+#pragma mark - Dynamic UIColor interception
+
+// Private UIColor subclasses override resolution/CGColor methods, so hooking
+// UIColor alone does not see every path. The analyzed reference tweak hooks
+// these concrete classes explicitly. We do the same, but only inside the
+// already app-only GlobalTintCore and every hook is a pass-through while the
+// compatibility switch is off.
+#define GT_DEFINE_DYNAMIC_COLOR_HOOK(SLOT) \
+    static UIColor *(*GTOrigResolved_##SLOT)(id, SEL, UITraitCollection *) = NULL; \
+    static CGColorRef (*GTOrigCGColor_##SLOT)(id, SEL) = NULL; \
+    static UIColor *GTHookResolved_##SLOT(id self, SEL _cmd, UITraitCollection *traits) { \
+        UIColor *resolved = GTOrigResolved_##SLOT \
+            ? GTOrigResolved_##SLOT(self, _cmd, traits) \
+            : (UIColor *)self; \
+        return GTColorEngineReplaceColor(resolved); \
+    } \
+    static CGColorRef GTHookCGColor_##SLOT(id self, SEL _cmd) { \
+        CGColorRef original = GTOrigCGColor_##SLOT \
+            ? GTOrigCGColor_##SLOT(self, _cmd) \
+            : NULL; \
+        return GTColorEngineReplaceCGColor(original); \
+    }
+
+GT_DEFINE_DYNAMIC_COLOR_HOOK(DeviceRGB)
+GT_DEFINE_DYNAMIC_COLOR_HOOK(CGColorBacked)
+GT_DEFINE_DYNAMIC_COLOR_HOOK(Dynamic)
+GT_DEFINE_DYNAMIC_COLOR_HOOK(DynamicCatalogSystem)
+GT_DEFINE_DYNAMIC_COLOR_HOOK(DynamicAppDefined)
+GT_DEFINE_DYNAMIC_COLOR_HOOK(DynamicProvider)
+GT_DEFINE_DYNAMIC_COLOR_HOOK(DynamicModified)
+GT_DEFINE_DYNAMIC_COLOR_HOOK(DynamicCatalog)
+
+static void GTInstallDynamicColorHook(Class cls,
+                                      IMP resolvedHook,
+                                      IMP *resolvedOriginal,
+                                      IMP cgColorHook,
+                                      IMP *cgColorOriginal) {
+    if (!cls) {
+        return;
+    }
+
+    SEL resolvedSelector =
+        @selector(resolvedColorWithTraitCollection:);
+
+    SEL cgColorSelector =
+        @selector(CGColor);
+
+    if (resolvedHook &&
+        resolvedOriginal &&
+        class_getInstanceMethod(cls, resolvedSelector)) {
+        MSHookMessageEx(
+            cls,
+            resolvedSelector,
+            resolvedHook,
+            resolvedOriginal
+        );
+    }
+
+    if (cgColorHook &&
+        cgColorOriginal &&
+        class_getInstanceMethod(cls, cgColorSelector)) {
+        MSHookMessageEx(
+            cls,
+            cgColorSelector,
+            cgColorHook,
+            cgColorOriginal
+        );
+    }
+}
+
+#define GT_INSTALL_DYNAMIC_COLOR_HOOK(CLASS_NAME, SLOT) \
+    GTInstallDynamicColorHook( \
+        objc_getClass(CLASS_NAME), \
+        (IMP)GTHookResolved_##SLOT, \
+        (IMP *)&GTOrigResolved_##SLOT, \
+        (IMP)GTHookCGColor_##SLOT, \
+        (IMP *)&GTOrigCGColor_##SLOT \
+    )
+
+static void GTInstallDynamicColorHooks(void) {
+    static dispatch_once_t onceToken;
+
+    dispatch_once(&onceToken, ^{
+        GT_INSTALL_DYNAMIC_COLOR_HOOK("UIDeviceRGBColor", DeviceRGB);
+        GT_INSTALL_DYNAMIC_COLOR_HOOK("UICGColor", CGColorBacked);
+        GT_INSTALL_DYNAMIC_COLOR_HOOK("UIDynamicColor", Dynamic);
+        GT_INSTALL_DYNAMIC_COLOR_HOOK("UIDynamicCatalogSystemColor", DynamicCatalogSystem);
+        GT_INSTALL_DYNAMIC_COLOR_HOOK("UIDynamicAppDefinedColor", DynamicAppDefined);
+        GT_INSTALL_DYNAMIC_COLOR_HOOK("UIDynamicProviderColor", DynamicProvider);
+        GT_INSTALL_DYNAMIC_COLOR_HOOK("UIDynamicModifiedColor", DynamicModified);
+        GT_INSTALL_DYNAMIC_COLOR_HOOK("UIDynamicCatalogColor", DynamicCatalog);
+    });
+}
+
+#undef GT_INSTALL_DYNAMIC_COLOR_HOOK
+#undef GT_DEFINE_DYNAMIC_COLOR_HOOK
 
 #pragma mark - Resolved color compatibility
 
 %hook UIView
 
 - (void)setTintColor:(UIColor *)tintColor {
+    if (GTColorEngineBypassDepth > 0) {
+        %orig(tintColor);
+        return;
+    }
+
     UIColor *incoming = tintColor;
+    UIColor *replacement = GTColorEngineReplaceColor(incoming);
 
-    if (GTShouldApplyBase() &&
-        GTForceResolvedBlue &&
-        GTLooksLikeResolvedSystemBlue(incoming)) {
-
-        if (!objc_getAssociatedObject(self, &GTOriginalResolvedTintKey)) {
-            objc_setAssociatedObject(
-                self,
-                &GTOriginalResolvedTintKey,
-                incoming ?: (id)[NSNull null],
-                OBJC_ASSOCIATION_RETAIN_NONATOMIC
-            );
-        }
-
-        incoming = GTReplacementPreservingAlpha(incoming);
+    if (replacement && replacement != incoming) {
+        GTRememberColorOnce(
+            self,
+            &GTOriginalResolvedTintKey,
+            incoming
+        );
+        incoming = replacement;
     } else if (GTForceResolvedBlue &&
                incoming &&
                !GTLooksLikeResolvedSystemBlue(incoming)) {
-
-        // The host app deliberately changed to a non-system-blue color.
-        objc_setAssociatedObject(
+        // The host app deliberately changed to a non-target color. Do not
+        // restore an obsolete value if the compatibility switch is disabled.
+        GTClearRememberedColor(
             self,
-            &GTOriginalResolvedTintKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            &GTOriginalResolvedTintKey
+        );
+    }
+
+    %orig(incoming);
+}
+
+- (void)setBackgroundColor:(UIColor *)backgroundColor {
+    if (GTColorEngineBypassDepth > 0) {
+        %orig(backgroundColor);
+        return;
+    }
+
+    UIColor *incoming = backgroundColor;
+    UIColor *replacement = GTColorEngineReplaceColor(incoming);
+
+    if (replacement && replacement != incoming) {
+        GTRememberColorOnce(
+            self,
+            &GTOriginalResolvedBackgroundColorKey,
+            incoming
+        );
+        incoming = replacement;
+    } else if (GTForceResolvedBlue &&
+               incoming &&
+               !GTLooksLikeResolvedSystemBlue(incoming)) {
+        GTClearRememberedColor(
+            self,
+            &GTOriginalResolvedBackgroundColorKey
         );
     }
 
@@ -2427,32 +2932,73 @@ static void GTRefreshKnownWindows(void) {
 %hook UILabel
 
 - (void)setTextColor:(UIColor *)textColor {
+    if (GTColorEngineBypassDepth > 0) {
+        %orig(textColor);
+        return;
+    }
+
     UIColor *incoming = textColor;
+    UIColor *replacement = GTColorEngineReplaceColor(incoming);
 
-    if (GTShouldApplyBase() &&
-        GTForceResolvedBlue &&
-        GTLooksLikeResolvedSystemBlue(incoming)) {
-
-        if (!objc_getAssociatedObject(self,
-                                      &GTOriginalResolvedTextColorKey)) {
-            objc_setAssociatedObject(
-                self,
-                &GTOriginalResolvedTextColorKey,
-                incoming ?: (id)[NSNull null],
-                OBJC_ASSOCIATION_RETAIN_NONATOMIC
-            );
-        }
-
-        incoming = GTReplacementPreservingAlpha(incoming);
+    if (replacement && replacement != incoming) {
+        GTRememberColorOnce(
+            self,
+            &GTOriginalResolvedTextColorKey,
+            incoming
+        );
+        incoming = replacement;
     } else if (GTForceResolvedBlue &&
                incoming &&
                !GTLooksLikeResolvedSystemBlue(incoming)) {
-
-        objc_setAssociatedObject(
+        GTClearRememberedColor(
             self,
-            &GTOriginalResolvedTextColorKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+            &GTOriginalResolvedTextColorKey
+        );
+    }
+
+    %orig(incoming);
+}
+
+%end
+
+%hook CALayer
+
+- (void)setBackgroundColor:(CGColorRef)backgroundColor {
+    if (GTColorEngineBypassDepth > 0 ||
+        !backgroundColor ||
+        !GTForceResolvedBlue ||
+        !GTShouldApplyBase()) {
+        %orig(backgroundColor);
+        return;
+    }
+
+    CGColorRef incoming = backgroundColor;
+    UIColor *sourceColor = GTConcreteColorFromCGColor(backgroundColor);
+
+    if (!sourceColor) {
+        %orig(backgroundColor);
+        return;
+    }
+
+    UIColor *replacement = GTColorEngineReplaceColor(sourceColor);
+
+    if (replacement && replacement != sourceColor &&
+        !GTColorsApproximatelyEqual(sourceColor, replacement, 0.01)) {
+        GTRememberColorOnce(
+            self,
+            &GTOriginalLayerBackgroundColorKey,
+            sourceColor
+        );
+        GTColorEngineHasLayerState = YES;
+
+        GTColorEngineBypassDepth++;
+        incoming = replacement.CGColor;
+        GTColorEngineBypassDepth--;
+    } else if (GTForceResolvedBlue &&
+               !GTLooksLikeResolvedSystemBlue(sourceColor)) {
+        GTClearRememberedColor(
+            self,
+            &GTOriginalLayerBackgroundColorKey
         );
     }
 
@@ -2466,7 +3012,8 @@ static void GTRefreshKnownWindows(void) {
 %hook UIColor
 
 + (UIColor *)systemBlueColor {
-    if (GTShouldApplyBase() && GTReplaceSystemBlue) {
+    if (GTShouldApplyBase() &&
+        (GTReplaceSystemBlue || GTForceResolvedBlue)) {
         return GTSemanticBlueColor();
     }
 
@@ -2483,14 +3030,7 @@ static void GTRefreshKnownWindows(void) {
 
 - (UIColor *)resolvedColorWithTraitCollection:(UITraitCollection *)traitCollection {
     UIColor *resolved = %orig(traitCollection);
-
-    if (GTShouldApplyBase() &&
-        GTForceResolvedBlue &&
-        GTLooksLikeResolvedSystemBlue(resolved)) {
-        return GTReplacementPreservingAlpha(resolved);
-    }
-
-    return resolved;
+    return GTColorEngineReplaceColor(resolved);
 }
 
 %end
@@ -3366,6 +3906,10 @@ static void GTRegisterPreferences(void) {
 
         // A custom Logos constructor is used, so initialize hooks explicitly.
         %init;
+
+        // Private dynamic UIColor subclasses override UIColor's resolution and
+        // CGColor paths. Hook them only after the public Logos layer is ready.
+        GTInstallDynamicColorHooks();
 
         // The optional UI inspector is implemented with its own
         // pass-through UIWindowScene overlay. Keep it synchronized with app

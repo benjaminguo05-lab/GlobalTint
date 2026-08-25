@@ -1,5 +1,24 @@
 # GlobalTint Changelog
 
+## 0.4.7
+
+- Upgraded the existing `ForceResolvedBlue` compatibility option into a multi-layer color interception engine while keeping the same preference key for 0.4.6 backup compatibility.
+- Added tolerant RGBA matching modeled after the analyzed reference tweak instead of exact color equality.
+- Added a narrow blue-family hue fallback for concrete SwiftUI/private-UIKit blue variants.
+- Added interception at multiple stages:
+  - `+[UIColor systemBlueColor]` when the enhanced engine is active
+  - `-[UIColor resolvedColorWithTraitCollection:]`
+  - private dynamic UIColor subclasses (`UIDynamic*`, `UIDeviceRGBColor`, `UICGColor`) for resolution and `CGColor`
+  - `-[UIView setTintColor:]`
+  - `-[UIView setBackgroundColor:]`
+  - `-[UILabel setTextColor:]`
+  - `-[CALayer setBackgroundColor:]`
+- Added UIColor/CGColor re-entry guards to prevent recursive hook loops.
+- Added restoration tracking for background colors and layer background colors when the enhanced engine is disabled.
+- Explicit GlobalTint output colors are excluded from re-processing so per-App/per-component custom colors remain authoritative.
+- Semantic red/green/orange/yellow are intentionally not collapsed into the accent color in this release.
+- Kept the V0.4.2 hard SpringBoard quarantine unchanged: the UIKit core is still never loaded in SpringBoard.
+
 ## 0.4.6
 
 - Added notification badge customization for ordinary App tab bars.

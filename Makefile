@@ -12,16 +12,17 @@ include $(THEOS)/makefiles/common.mk
 # explicitly loading the core.
 #
 # GlobalTintCore:
-# Contains the proven V0.3.5 UIKit implementation. Its own substrate filter is
-# intentionally impossible so MobileLoader never auto-loads it; the loader
-# dlopens it only inside eligible full application processes.
+# Contains the app-only UIKit implementation, including the V0.4.7 multi-layer
+# color engine. Its own substrate filter is intentionally impossible so
+# MobileLoader never auto-loads it; the loader dlopens it only inside eligible
+# full application processes.
 TWEAK_NAME = GlobalTintLoader GlobalTintCore
 
 GlobalTintLoader_FILES = Loader.c
 GlobalTintLoader_CFLAGS = -fvisibility=hidden
 
 GlobalTintCore_FILES = Tweak.xm
-GlobalTintCore_FRAMEWORKS = UIKit
+GlobalTintCore_FRAMEWORKS = UIKit QuartzCore CoreGraphics
 GlobalTintCore_LIBRARIES = roothide
 GlobalTintCore_CFLAGS = -fobjc-arc
 GlobalTintCore_CCFLAGS = -std=c++17
