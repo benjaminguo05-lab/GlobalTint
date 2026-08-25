@@ -1,5 +1,27 @@
 # GlobalTint Changelog
 
+## 0.3.4
+
+- Upgraded the App configuration manager UI.
+- Added App icons in the installed-App list.
+  - First tries UIKit's system application-icon provider dynamically.
+  - Falls back to LaunchServices icon data when available.
+  - Generates a local monogram icon if neither source is available.
+- Added a persistent search bar that matches both App display names and
+  Bundle IDs.
+- Apps with any GlobalTint configuration are sorted before unconfigured Apps
+  within the User/System sections.
+- Added compact per-App status text:
+  - `已排除`
+  - `主色`
+  - component color rule count (`N色`)
+  - component switch rule count (`N开关`)
+  - `未配置`
+- Added an App icon/name header row to each App detail page.
+- User App / System App grouping and the configured-but-missing fallback group
+  remain intact.
+- Tweak runtime logic is unchanged from V0.3.2/V0.3.3.
+
 ## 0.3.3
 
 - Added a dedicated installed-App configuration manager.

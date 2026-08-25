@@ -275,3 +275,11 @@ V0.3.3 adds an installed-App configuration manager in Settings. Select an App
 from LaunchServices and edit that App's exclusion state, accent color,
 component colors, and tri-state component enable rules from one page. Manual
 Bundle ID tools remain available as a fallback.
+
+
+## V0.3.4
+
+V0.3.4 improves the installed-App manager with real App icons, a persistent
+name/Bundle-ID search bar, configured-first sorting, compact configuration
+status text, and an icon header on each App detail page. The tweak runtime and
+color precedence are unchanged.
