@@ -244,3 +244,11 @@ Use `清除全部组件独立颜色` to return every component to main-color inh
 
 V0.2 can be installed over V0.1.6. Existing `Enabled`, `AccentColor`,
 `ApplyWindowTint`, `ApplyControls`, and `ApplyBars` preferences are retained.
+
+
+## V0.3.0
+
+V0.3.0 adds per-App accent profiles. A Bundle ID can be assigned its own accent
+color while all Apps without a profile continue to use the global accent.
+Explicit per-component colors still take priority when separate component
+colors are enabled.

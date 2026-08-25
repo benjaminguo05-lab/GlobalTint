@@ -1,5 +1,25 @@
 # GlobalTint Changelog
 
+## 0.3.0
+
+- Added per-App accent color profiles.
+- New `EnableAppColorOverrides` preference, enabled by default.
+- New `AppColorOverrides` dictionary stores `bundleID -> #RRGGBB`.
+- Per-App accent becomes the fallback/main accent only for the matching process.
+- Color precedence:
+  1. explicit component color when component-independent colors are enabled
+  2. matching App accent override
+  3. global AccentColor
+- Added Settings UI to:
+  - add or update an App color using a Bundle ID + native UIColorPicker
+  - show configured profile count
+  - delete individual App profiles
+  - clear all App profiles
+- Existing exclusions still take priority: excluded Apps receive no GlobalTint
+  coloring even if an App accent profile exists.
+- App profiles are stored in the existing preferences plist and are available
+  to sandboxed Apps through the proven libSandy preference path.
+
 ## 0.2.20
 
 - Stable cleanup release after V0.2.19 fixed sandbox preference access.

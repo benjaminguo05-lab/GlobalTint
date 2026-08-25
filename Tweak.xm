@@ -37,6 +37,7 @@ static BOOL GTEnableSearchBar = YES;
 
 // Color mode
 static BOOL GTUseSeparateColors = NO;
+static BOOL GTEnableAppColorOverrides = YES;
 
 // Compatibility / diagnostics
 static BOOL GTReplaceSystemBlue = NO;
@@ -63,6 +64,7 @@ static NSString *GTToolbarHex = @"";
 static NSString *GTSearchBarHex = @"";
 
 static NSString *GTExcludedBundleIDs = @"";
+static NSDictionary<NSString *, NSString *> *GTAppColorOverrides = nil;
 
 static UIColor *GTAccentColor = nil;
 
@@ -145,25 +147,57 @@ static UIColor *GTColorFromHexOrNil(NSString *hex) {
     return [UIColor colorWithRed:r green:g blue:b alpha:a];
 }
 
-static UIColor *GTColorForComponentHex(NSString *componentHex) {
+static UIColor *GTGlobalAccentColor(void) {
     if (!GTAccentColor) {
-        GTAccentColor = GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
+        GTAccentColor =
+            GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
     }
+
+    return GTAccentColor;
+}
+
+static NSString *GTCurrentBundleIdentifier(void) {
+    NSString *bundleID =
+        NSBundle.mainBundle.bundleIdentifier.lowercaseString;
+
+    return bundleID ?: @"";
+}
+
+static UIColor *GTCurrentAppAccentColor(void) {
+    UIColor *globalAccent = GTGlobalAccentColor();
+
+    if (!GTEnableAppColorOverrides ||
+        GTAppColorOverrides.count == 0) {
+        return globalAccent;
+    }
+
+    NSString *bundleID = GTCurrentBundleIdentifier();
+
+    if (bundleID.length == 0) {
+        return globalAccent;
+    }
+
+    NSString *overrideHex = GTAppColorOverrides[bundleID];
+    UIColor *overrideColor = GTColorFromHexOrNil(overrideHex);
+
+    return overrideColor ?: globalAccent;
+}
+
+static UIColor *GTColorForComponentHex(NSString *componentHex) {
+    UIColor *baseAccent = GTCurrentAppAccentColor();
 
     if (!GTUseSeparateColors) {
-        return GTAccentColor;
+        return baseAccent;
     }
 
-    return GTColorFromHexOrNil(componentHex) ?: GTAccentColor;
+    return GTColorFromHexOrNil(componentHex) ?: baseAccent;
 }
 
 
 static UIColor *GTSemanticBlueColor(void) {
-    if (!GTAccentColor) {
-        GTAccentColor = GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
-    }
+    UIColor *baseAccent = GTCurrentAppAccentColor();
 
-    return GTColorFromHexOrNil(GTSemanticBlueHex) ?: GTAccentColor;
+    return GTColorFromHexOrNil(GTSemanticBlueHex) ?: baseAccent;
 }
 
 
@@ -2191,6 +2225,56 @@ static NSString *GTStringPreference(NSString *key,
     return [fallback copy];
 }
 
+static NSDictionary *GTDictionaryPreference(NSString *key) {
+    id value = [GTPreferences objectForKey:key];
+
+    if ([value isKindOfClass:[NSDictionary class]]) {
+        return [(NSDictionary *)value copy];
+    }
+
+    return @{};
+}
+
+static NSDictionary<NSString *, NSString *> *
+GTNormalizedAppColorOverrides(NSDictionary *source) {
+    if (![source isKindOfClass:[NSDictionary class]] ||
+        source.count == 0) {
+        return @{};
+    }
+
+    NSMutableDictionary<NSString *, NSString *> *result =
+        [NSMutableDictionary dictionary];
+
+    [source enumerateKeysAndObjectsUsingBlock:
+        ^(id rawKey, id rawValue, BOOL *stop) {
+
+        if (![rawKey isKindOfClass:[NSString class]] ||
+            ![rawValue isKindOfClass:[NSString class]]) {
+            return;
+        }
+
+        NSString *bundleID =
+            [[(NSString *)rawKey
+              stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]]
+             lowercaseString];
+
+        NSString *hex =
+            [(NSString *)rawValue
+             stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+        if (bundleID.length == 0 ||
+            !GTColorFromHexOrNil(hex)) {
+            return;
+        }
+
+        result[bundleID] = hex.uppercaseString;
+    }];
+
+    return [result copy];
+}
+
 static void GTLoadPreferencesFromDisk(void) {
     if (!GTPreferences) {
         return;
@@ -2214,6 +2298,9 @@ static void GTLoadPreferencesFromDisk(void) {
 
     GTUseSeparateColors =
         GTBoolPreference(@"UseSeparateColors", NO);
+
+    GTEnableAppColorOverrides =
+        GTBoolPreference(@"EnableAppColorOverrides", YES);
 
     GTReplaceSystemBlue =
         GTBoolPreference(@"ReplaceSystemBlue", NO);
@@ -2302,6 +2389,11 @@ static void GTLoadPreferencesFromDisk(void) {
     GTExcludedBundleIDs =
         GTStringPreference(@"ExcludedBundleIDs", @"");
 
+    GTAppColorOverrides =
+        GTNormalizedAppColorOverrides(
+            GTDictionaryPreference(@"AppColorOverrides")
+        );
+
     GTAccentColor =
         GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
 
@@ -2338,6 +2430,7 @@ static void GTRegisterPreferences(void) {
         @"ApplyControls": @YES,
         @"ApplyBars": @YES,
         @"UseSeparateColors": @NO,
+        @"EnableAppColorOverrides": @YES,
         @"ReplaceSystemBlue": @NO,
         @"ReplaceLinkColor": @NO,
         @"DebugInjectionBorder": @NO,
@@ -2366,7 +2459,8 @@ static void GTRegisterPreferences(void) {
         @"TabBarColor": @"",
         @"ToolbarColor": @"",
         @"SearchBarColor": @"",
-        @"ExcludedBundleIDs": @""
+        @"ExcludedBundleIDs": @"",
+        @"AppColorOverrides": @{}
     }];
 
     GTLoadPreferencesFromDisk();
