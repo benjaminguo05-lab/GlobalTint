@@ -396,8 +396,12 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
     }
 
     if (initial.length == 0) {
-        initial =
-            [self appAccentHex] ?: [self globalAccentHex];
+        if ([key isEqualToString:@"BadgeTextColor"]) {
+            initial = @"#FFFFFF";
+        } else {
+            initial =
+                [self appAccentHex] ?: [self globalAccentHex];
+        }
     }
 
     UIColorPickerViewController *picker =
@@ -457,6 +461,16 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
 - (void)chooseTabBarColor {
     [self presentComponentColorPickerForKey:@"TabBarColor"
                                        name:@"底部标签栏"];
+}
+
+- (void)chooseBadgeBackgroundColor {
+    [self presentComponentColorPickerForKey:@"BadgeBackgroundColor"
+                                       name:@"通知角标背景色"];
+}
+
+- (void)chooseBadgeTextColor {
+    [self presentComponentColorPickerForKey:@"BadgeTextColor"
+                                       name:@"通知角标数字颜色"];
 }
 
 - (void)chooseToolbarColor {
@@ -696,6 +710,11 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
 - (void)chooseTabBarSwitch {
     [self presentComponentSwitchChoiceForKey:@"TabBar"
                                         name:@"底部标签栏"];
+}
+
+- (void)chooseTabBarBadgeSwitch {
+    [self presentComponentSwitchChoiceForKey:@"TabBarBadge"
+                                        name:@"通知角标"];
 }
 
 - (void)chooseToolbarSwitch {
@@ -964,7 +983,7 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
          groupSpecifierWithName:@"应用独立界面颜色"];
 
     [colorGroup setProperty:
-        @"需要主页面开启“启用组件独立颜色”。没有单独设置的项目，会依次使用：全局对应颜色 → 此 App 主色 → 全局主色。"
+        @"需要主页面开启“启用各界面独立颜色”。没有单独设置的项目，会依次使用：全局对应颜色 → 此应用主色 → 全局主色。通知角标数字未单独设置时默认为白色。"
         forKey:@"footerText"];
 
     [items addObject:colorGroup];
@@ -1013,6 +1032,16 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
         [self componentColorButtonForKey:@"TabBarColor"
                                     name:@"底部标签栏"
                                   action:@selector(chooseTabBarColor)]];
+
+    [items addObject:
+        [self componentColorButtonForKey:@"BadgeBackgroundColor"
+                                    name:@"通知角标背景色"
+                                  action:@selector(chooseBadgeBackgroundColor)]];
+
+    [items addObject:
+        [self componentColorButtonForKey:@"BadgeTextColor"
+                                    name:@"通知角标数字颜色"
+                                  action:@selector(chooseBadgeTextColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"ToolbarColor"
@@ -1095,6 +1124,11 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
         [self componentSwitchButtonForKey:@"TabBar"
                                      name:@"底部标签栏"
                                    action:@selector(chooseTabBarSwitch)]];
+
+    [items addObject:
+        [self componentSwitchButtonForKey:@"TabBarBadge"
+                                     name:@"通知角标"
+                                   action:@selector(chooseTabBarBadgeSwitch)]];
 
     [items addObject:
         [self componentSwitchButtonForKey:@"Toolbar"

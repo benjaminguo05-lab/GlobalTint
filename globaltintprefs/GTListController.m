@@ -194,7 +194,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     PSSpecifier *general =
         [PSSpecifier groupSpecifierWithName:@"全局设置"];
     [general setProperty:
-        @"V0.4.4：主设置页与手动配置界面进一步中文化，尽量直接说明每个选项实际会修改界面的哪个位置。"
+        @"V0.4.6：新增底部标签栏通知角标颜色，并加入当前配置的本地备份与一键恢复功能。"
         forKey:@"footerText"];
     [items addObject:general];
 
@@ -528,6 +528,20 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                            action:@selector(chooseTabBarColor)]];
 
     [items addObject:
+        [self colorButtonWithName:@"通知角标背景色"
+                              key:@"BadgeBackgroundColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseBadgeBackgroundColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"通知角标数字颜色"
+                              key:@"BadgeTextColor"
+                     defaultValue:@"#FFFFFF"
+                    allowInherit:NO
+                           action:@selector(chooseBadgeTextColor)]];
+
+    [items addObject:
         [self colorButtonWithName:@"工具栏"
                               key:@"ToolbarColor"
                      defaultValue:@""
@@ -603,7 +617,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     PSSpecifier *barSwitches =
         [PSSpecifier groupSpecifierWithName:@"导航栏与工具栏开关"];
     [barSwitches setProperty:
-        @"“导航栏与工具栏总开关”关闭时，下面的顶部导航栏、底部标签栏、工具栏和搜索栏都会停止强制改色。"
+        @"“导航栏与工具栏总开关”关闭时，下面的顶部导航栏、底部标签栏、通知角标、工具栏和搜索栏都会停止强制改色。通知角标默认关闭，开启后背景默认跟随主色，数字默认白色。"
         forKey:@"footerText"];
     [items addObject:barSwitches];
 
@@ -621,6 +635,11 @@ static NSString *GTHexStringFromColor(UIColor *color) {
         [self switchSpecifierWithName:@"底部标签栏"
                                   key:@"ApplyTabBar"
                          defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"通知角标"
+                                  key:@"ApplyTabBarBadge"
+                         defaultValue:NO]];
 
     [items addObject:
         [self switchSpecifierWithName:@"工具栏"
@@ -672,10 +691,73 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     clearExclusions.buttonAction = @selector(clearExcludedBundleIDs);
     [items addObject:clearExclusions];
 
+    // Configuration backup
+    PSSpecifier *backupGroup =
+        [PSSpecifier groupSpecifierWithName:@"配置备份"];
+
+    [backupGroup setProperty:
+        @"保存的是 GlobalTint 当前完整设置快照，包括主色、界面颜色、应用独立配置、兼容选项、开关和排除列表。恢复默认设置不会删除这份备份。"
+        forKey:@"footerText"];
+
+    [items addObject:backupGroup];
+
+    PSSpecifier *backupStatus =
+        [PSSpecifier preferenceSpecifierNamed:@"已保存配置"
+                                       target:self
+                                          set:nil
+                                          get:@selector(configurationBackupSummary:)
+                                       detail:nil
+                                         cell:PSTitleValueCell
+                                         edit:nil];
+
+    [items addObject:backupStatus];
+
+    PSSpecifier *saveBackup =
+        [PSSpecifier preferenceSpecifierNamed:@"保存当前配置"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+
+    saveBackup.buttonAction =
+        @selector(saveCurrentConfiguration);
+
+    [items addObject:saveBackup];
+
+    PSSpecifier *restoreBackup =
+        [PSSpecifier preferenceSpecifierNamed:@"恢复已保存配置"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+
+    restoreBackup.buttonAction =
+        @selector(restoreSavedConfiguration);
+
+    [items addObject:restoreBackup];
+
+    PSSpecifier *clearBackup =
+        [PSSpecifier preferenceSpecifierNamed:@"删除已保存配置"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+
+    clearBackup.buttonAction =
+        @selector(clearSavedConfiguration);
+
+    [items addObject:clearBackup];
+
     // Reset
     PSSpecifier *resetGroup = [PSSpecifier emptyGroupSpecifier];
     [resetGroup setProperty:
-        @"V0.4.4 继续保持 V0.4.2 的安全隔离架构：GlobalTint 只在普通应用中运行，不注入 SpringBoard。当前主要覆盖常见系统界面元素；系统桌面与控制中心功能将在独立模块中开发。"
+        @"V0.4.6 继续保持 V0.4.2 的安全隔离架构：GlobalTint 只在普通应用中运行，不注入 SpringBoard。通知角标属于普通 App 的底部标签栏功能，不涉及系统桌面。"
         forKey:@"footerText"];
     [items addObject:resetGroup];
 
@@ -809,6 +891,18 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                              title:@"底部标签栏"];
 }
 
+- (void)chooseBadgeBackgroundColor {
+    [self presentColorPickerForKey:@"BadgeBackgroundColor"
+                      defaultValue:@""
+                             title:@"通知角标背景色"];
+}
+
+- (void)chooseBadgeTextColor {
+    [self presentColorPickerForKey:@"BadgeTextColor"
+                      defaultValue:@"#FFFFFF"
+                             title:@"通知角标数字颜色"];
+}
+
 - (void)chooseToolbarColor {
     [self presentColorPickerForKey:@"ToolbarColor"
                       defaultValue:@""
@@ -912,6 +1006,8 @@ static NSString *GTHexStringFromColor(UIColor *color) {
         @"RefreshControlColor",
         @"NavigationBarColor",
         @"TabBarColor",
+        @"BadgeBackgroundColor",
+        @"BadgeTextColor",
         @"ToolbarColor",
         @"SearchBarColor"
     ];
@@ -1217,6 +1313,8 @@ appComponentColorOverrides {
         @"RefreshControlColor": @"下拉刷新指示器",
         @"NavigationBarColor": @"顶部导航栏",
         @"TabBarColor": @"底部标签栏",
+        @"BadgeBackgroundColor": @"通知角标背景色",
+        @"BadgeTextColor": @"通知角标数字颜色",
         @"ToolbarColor": @"工具栏",
         @"SearchBarColor": @"搜索栏"
     };
@@ -1346,6 +1444,8 @@ appComponentColorOverrides {
         @"RefreshControlColor",
         @"NavigationBarColor",
         @"TabBarColor",
+        @"BadgeBackgroundColor",
+        @"BadgeTextColor",
         @"ToolbarColor",
         @"SearchBarColor"
     ];
@@ -1651,6 +1751,7 @@ appComponentSwitchOverrides {
         @"RefreshControl": @"下拉刷新指示器",
         @"NavigationBar": @"顶部导航栏",
         @"TabBar": @"底部标签栏",
+        @"TabBarBadge": @"通知角标",
         @"Toolbar": @"工具栏",
         @"SearchBar": @"搜索栏"
     };
@@ -1667,6 +1768,7 @@ appComponentSwitchOverrides {
         @"RefreshControl",
         @"NavigationBar",
         @"TabBar",
+        @"TabBarBadge",
         @"Toolbar",
         @"SearchBar"
     ];
@@ -2150,12 +2252,305 @@ appComponentSwitchOverrides {
     [self reloadSpecifiers];
 }
 
+#pragma mark - Configuration backup
+
+- (NSArray<NSString *> *)managedConfigurationKeys {
+    return @[
+        @"Enabled",
+        @"ApplyWindowTint",
+        @"ApplyControls",
+        @"ApplyBars",
+        @"UseSeparateColors",
+        @"EnableAppColorOverrides",
+        @"EnableAppComponentSwitchOverrides",
+        @"ReplaceSystemBlue",
+        @"ReplaceLinkColor",
+        @"DebugInjectionBorder",
+        @"ForceResolvedBlue",
+        @"ElementInspector",
+        @"ApplySwitch",
+        @"ApplySlider",
+        @"ApplyProgress",
+        @"ApplySegmented",
+        @"ApplyPageControl",
+        @"ApplyRefreshControl",
+        @"ApplyNavigationBar",
+        @"ApplyTabBar",
+        @"ApplyTabBarBadge",
+        @"ApplyToolbar",
+        @"ApplySearchBar",
+        @"AccentColor",
+        @"SemanticBlueColor",
+        @"WindowColor",
+        @"SwitchColor",
+        @"SliderColor",
+        @"ProgressColor",
+        @"SegmentedColor",
+        @"PageControlColor",
+        @"RefreshControlColor",
+        @"NavigationBarColor",
+        @"TabBarColor",
+        @"BadgeBackgroundColor",
+        @"BadgeTextColor",
+        @"ToolbarColor",
+        @"SearchBarColor",
+        @"ExcludedBundleIDs",
+        @"AppColorOverrides",
+        @"AppComponentColorOverrides",
+        @"AppComponentSwitchOverrides"
+    ];
+}
+
+- (id)configurationBackupSummary:(PSSpecifier *)specifier {
+    HBPreferences *preferences = [self preferences];
+
+    id backup =
+        [preferences objectForKey:@"SavedConfiguration"];
+
+    if (![backup isKindOfClass:[NSDictionary class]]) {
+        return @"未保存";
+    }
+
+    id date =
+        [preferences objectForKey:@"SavedConfigurationDate"];
+
+    if (![date isKindOfClass:[NSDate class]]) {
+        return @"已保存";
+    }
+
+    NSDateFormatter *formatter =
+        [[NSDateFormatter alloc] init];
+
+    formatter.dateFormat = @"MM-dd HH:mm";
+
+    return [NSString stringWithFormat:
+        @"已保存 · %@",
+        [formatter stringFromDate:date]];
+}
+
+- (NSDictionary *)currentConfigurationSnapshot {
+    HBPreferences *preferences = [self preferences];
+
+    NSMutableDictionary *snapshot =
+        [NSMutableDictionary dictionary];
+
+    for (NSString *key in
+         [self managedConfigurationKeys]) {
+
+        id value =
+            [preferences objectForKey:key];
+
+        if (value) {
+            snapshot[key] = value;
+        }
+    }
+
+    return [snapshot copy];
+}
+
+- (void)writeConfigurationSnapshot:
+    (NSDictionary *)snapshot {
+
+    if (![snapshot isKindOfClass:[NSDictionary class]]) {
+        return;
+    }
+
+    HBPreferences *preferences = [self preferences];
+
+    for (NSString *key in
+         [self managedConfigurationKeys]) {
+        [preferences removeObjectForKey:key];
+    }
+
+    for (NSString *key in snapshot) {
+        if (![[self managedConfigurationKeys]
+              containsObject:key]) {
+            continue;
+        }
+
+        id value = snapshot[key];
+
+        if (value) {
+            [preferences setObject:value
+                            forKey:key];
+        }
+    }
+
+    [self postReloadNotification];
+    [self reloadSpecifiers];
+}
+
+- (void)saveCurrentConfiguration {
+    HBPreferences *preferences = [self preferences];
+
+    BOOL hasBackup =
+        [[preferences objectForKey:@"SavedConfiguration"]
+         isKindOfClass:[NSDictionary class]];
+
+    UIAlertController *alert =
+        [UIAlertController
+         alertControllerWithTitle:@"保存当前配置"
+                          message:
+            (hasBackup
+             ? @"已有一份保存的配置。继续会覆盖旧备份。"
+             : @"保存当前 GlobalTint 的全部设置，之后可以一键恢复。")
+                   preferredStyle:
+            UIAlertControllerStyleAlert];
+
+    [alert addAction:
+        [UIAlertAction
+         actionWithTitle:@"取消"
+                   style:UIAlertActionStyleCancel
+                 handler:nil]];
+
+    __weak typeof(self) weakSelf = self;
+
+    [alert addAction:
+        [UIAlertAction
+         actionWithTitle:@"保存"
+                   style:UIAlertActionStyleDefault
+                 handler:
+            ^(__unused UIAlertAction *action) {
+
+        HBPreferences *prefs =
+            [weakSelf preferences];
+
+        [prefs setObject:
+            [weakSelf currentConfigurationSnapshot]
+                forKey:@"SavedConfiguration"];
+
+        [prefs setObject:[NSDate date]
+                  forKey:@"SavedConfigurationDate"];
+
+        [prefs setObject:@"0.4.6"
+                  forKey:@"SavedConfigurationVersion"];
+
+        [weakSelf reloadSpecifiers];
+    }]];
+
+    [self presentViewController:alert
+                       animated:YES
+                     completion:nil];
+}
+
+- (void)restoreSavedConfiguration {
+    HBPreferences *preferences = [self preferences];
+
+    id backup =
+        [preferences objectForKey:@"SavedConfiguration"];
+
+    if (![backup isKindOfClass:[NSDictionary class]]) {
+        UIAlertController *empty =
+            [UIAlertController
+             alertControllerWithTitle:@"没有已保存配置"
+                              message:@"请先使用“保存当前配置”。"
+                       preferredStyle:
+            UIAlertControllerStyleAlert];
+
+        [empty addAction:
+            [UIAlertAction
+             actionWithTitle:@"好"
+                       style:UIAlertActionStyleDefault
+                     handler:nil]];
+
+        [self presentViewController:empty
+                           animated:YES
+                         completion:nil];
+        return;
+    }
+
+    UIAlertController *alert =
+        [UIAlertController
+         alertControllerWithTitle:@"恢复已保存配置"
+                          message:@"当前设置会被已保存的配置覆盖。"
+                   preferredStyle:
+            UIAlertControllerStyleAlert];
+
+    [alert addAction:
+        [UIAlertAction
+         actionWithTitle:@"取消"
+                   style:UIAlertActionStyleCancel
+                 handler:nil]];
+
+    __weak typeof(self) weakSelf = self;
+
+    [alert addAction:
+        [UIAlertAction
+         actionWithTitle:@"恢复"
+                   style:UIAlertActionStyleDestructive
+                 handler:
+            ^(__unused UIAlertAction *action) {
+
+        NSDictionary *snapshot =
+            [[[weakSelf preferences]
+              objectForKey:@"SavedConfiguration"]
+             copy];
+
+        [weakSelf
+            writeConfigurationSnapshot:snapshot];
+    }]];
+
+    [self presentViewController:alert
+                       animated:YES
+                     completion:nil];
+}
+
+- (void)clearSavedConfiguration {
+    HBPreferences *preferences = [self preferences];
+
+    if (![[preferences objectForKey:@"SavedConfiguration"]
+          isKindOfClass:[NSDictionary class]]) {
+        return;
+    }
+
+    UIAlertController *alert =
+        [UIAlertController
+         alertControllerWithTitle:@"删除已保存配置"
+                          message:@"删除后将无法再从这份本地备份恢复。"
+                   preferredStyle:
+            UIAlertControllerStyleAlert];
+
+    [alert addAction:
+        [UIAlertAction
+         actionWithTitle:@"取消"
+                   style:UIAlertActionStyleCancel
+                 handler:nil]];
+
+    __weak typeof(self) weakSelf = self;
+
+    [alert addAction:
+        [UIAlertAction
+         actionWithTitle:@"删除"
+                   style:UIAlertActionStyleDestructive
+                 handler:
+            ^(__unused UIAlertAction *action) {
+
+        HBPreferences *prefs =
+            [weakSelf preferences];
+
+        [prefs removeObjectForKey:
+            @"SavedConfiguration"];
+
+        [prefs removeObjectForKey:
+            @"SavedConfigurationDate"];
+
+        [prefs removeObjectForKey:
+            @"SavedConfigurationVersion"];
+
+        [weakSelf reloadSpecifiers];
+    }]];
+
+    [self presentViewController:alert
+                       animated:YES
+                     completion:nil];
+}
+
 #pragma mark - Reset
 
 - (void)resetPreferences {
     UIAlertController *alert =
         [UIAlertController alertControllerWithTitle:@"恢复默认设置"
-                                            message:@"将主色、应用独立主色、应用独立界面颜色、应用独立界面开关、全局界面颜色、界面开关以及应用排除列表全部恢复为默认值。"
+                                            message:@"将主色、应用独立主色、应用独立界面颜色、应用独立界面开关、全局界面颜色、界面开关以及应用排除列表全部恢复为默认值。已保存的配置备份不会被删除。"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addAction:
@@ -2171,7 +2566,11 @@ appComponentSwitchOverrides {
                                handler:^(__unused UIAlertAction *action) {
 
         HBPreferences *preferences = [weakSelf preferences];
-        [preferences removeAllObjects];
+
+        for (NSString *key in
+             [weakSelf managedConfigurationKeys]) {
+            [preferences removeObjectForKey:key];
+        }
 
         [weakSelf postReloadNotification];
         [weakSelf reloadSpecifiers];
