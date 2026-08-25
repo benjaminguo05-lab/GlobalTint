@@ -192,14 +192,14 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
     // General
     PSSpecifier *general =
-        [PSSpecifier groupSpecifierWithName:@"GLOBAL TINT"];
+        [PSSpecifier groupSpecifierWithName:@"全局设置"];
     [general setProperty:
-        @"V0.4.3：设置页界面名称全面中文化，尽量用普通用户能直接理解的名称描述实际修改位置。"
+        @"V0.4.4：主设置页与手动配置界面进一步中文化，尽量直接说明每个选项实际会修改界面的哪个位置。"
         forKey:@"footerText"];
     [items addObject:general];
 
     [items addObject:
-        [self switchSpecifierWithName:@"启用 Global Tint"
+        [self switchSpecifierWithName:@"启用全局改色"
                                   key:@"Enabled"
                          defaultValue:YES]];
 
@@ -211,16 +211,16 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                            action:@selector(chooseAccentColor)]];
 
     PSSpecifier *managerGroup =
-        [PSSpecifier groupSpecifierWithName:@"App 配置管理"];
+        [PSSpecifier groupSpecifierWithName:@"应用配置管理"];
 
     [managerGroup setProperty:
-        @"推荐使用这里直接选择已安装 App。V0.3.4 支持 App 图标、名称/Bundle ID 搜索、配置状态和已配置优先排序；下面仍保留手动 Bundle ID 作为备用入口。"
+        @"推荐从这里直接选择已安装应用。支持应用图标、名称或应用标识（Bundle ID）搜索、配置状态显示和已配置应用优先排序。下面仍保留手动输入应用标识作为备用入口。"
         forKey:@"footerText"];
 
     [items addObject:managerGroup];
 
     PSSpecifier *appManager =
-        [PSSpecifier preferenceSpecifierNamed:@"打开 App 配置管理器"
+        [PSSpecifier preferenceSpecifierNamed:@"打开应用配置管理器"
                                        target:self
                                           set:nil
                                           get:nil
@@ -231,19 +231,19 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:appManager];
 
     PSSpecifier *appProfiles =
-        [PSSpecifier groupSpecifierWithName:@"App 独立主色（高级 / 手动）"];
+        [PSSpecifier groupSpecifierWithName:@"应用独立主色（高级 / 手动）"];
     [appProfiles setProperty:
-        @"为指定 Bundle ID 单独设置主主题色。组件独立颜色关闭时，该 App 的所有组件跟随此颜色；开启组件独立颜色后，已明确设置组件颜色的项目优先，未设置的项目继续跟随 App 独立主色。可通过 UI 元素检查器报告第一行查看 Bundle ID。"
+        @"为指定应用标识（Bundle ID）单独设置主主题色。关闭各界面独立颜色时，该应用的界面元素统一跟随此颜色；开启后，单独设置过颜色的界面优先，未设置的继续跟随应用主色。可通过界面元素检查器报告第一行查看应用标识。"
         forKey:@"footerText"];
     [items addObject:appProfiles];
 
     [items addObject:
-        [self switchSpecifierWithName:@"启用 App 独立主色"
+        [self switchSpecifierWithName:@"启用应用独立主色"
                                   key:@"EnableAppColorOverrides"
                          defaultValue:YES]];
 
     PSSpecifier *profileSummary =
-        [PSSpecifier preferenceSpecifierNamed:@"已配置 App"
+        [PSSpecifier preferenceSpecifierNamed:@"已配置应用"
                                        target:self
                                           set:nil
                                           get:@selector(appColorOverrideSummary:)
@@ -253,7 +253,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:profileSummary];
 
     PSSpecifier *addProfile =
-        [PSSpecifier preferenceSpecifierNamed:@"添加 / 修改 App 主色"
+        [PSSpecifier preferenceSpecifierNamed:@"添加 / 修改应用主色"
                                        target:self
                                           set:nil
                                           get:nil
@@ -264,7 +264,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:addProfile];
 
     PSSpecifier *removeProfile =
-        [PSSpecifier preferenceSpecifierNamed:@"删除 App 主色"
+        [PSSpecifier preferenceSpecifierNamed:@"删除应用主色"
                                        target:self
                                           set:nil
                                           get:nil
@@ -275,7 +275,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:removeProfile];
 
     PSSpecifier *clearProfiles =
-        [PSSpecifier preferenceSpecifierNamed:@"清空全部 App 主色"
+        [PSSpecifier preferenceSpecifierNamed:@"清空全部应用主色"
                                        target:self
                                           set:nil
                                           get:nil
@@ -286,9 +286,9 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:clearProfiles];
 
     PSSpecifier *appComponentGroup =
-        [PSSpecifier groupSpecifierWithName:@"App 独立界面颜色（高级 / 手动）"];
+        [PSSpecifier groupSpecifierWithName:@"应用独立界面颜色（高级 / 手动）"];
     [appComponentGroup setProperty:
-        @"需要先开启“启用组件独立颜色”。优先级：App 独立组件颜色 > 全局组件颜色 > App 独立主色 > 全局主色。"
+        @"需要先开启“启用各界面独立颜色”。颜色优先级：应用独立界面颜色 > 全局对应界面颜色 > 应用独立主色 > 全局主色。"
         forKey:@"footerText"];
     [items addObject:appComponentGroup];
 
@@ -303,7 +303,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:componentSummary];
 
     PSSpecifier *addComponent =
-        [PSSpecifier preferenceSpecifierNamed:@"添加 / 修改 App 界面颜色"
+        [PSSpecifier preferenceSpecifierNamed:@"添加 / 修改应用界面颜色"
                                        target:self
                                           set:nil
                                           get:nil
@@ -315,7 +315,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:addComponent];
 
     PSSpecifier *removeComponent =
-        [PSSpecifier preferenceSpecifierNamed:@"删除 App 界面颜色"
+        [PSSpecifier preferenceSpecifierNamed:@"删除应用界面颜色"
                                        target:self
                                           set:nil
                                           get:nil
@@ -327,7 +327,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:removeComponent];
 
     PSSpecifier *clearComponents =
-        [PSSpecifier preferenceSpecifierNamed:@"清空全部 App 界面颜色"
+        [PSSpecifier preferenceSpecifierNamed:@"清空全部应用界面颜色"
                                        target:self
                                           set:nil
                                           get:nil
@@ -339,14 +339,14 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:clearComponents];
 
     PSSpecifier *appSwitchGroup =
-        [PSSpecifier groupSpecifierWithName:@"App 独立界面开关（高级 / 手动）"];
+        [PSSpecifier groupSpecifierWithName:@"应用独立界面开关（高级 / 手动）"];
     [appSwitchGroup setProperty:
-        @"App 独立开关优先于单个全局组件开关；“标准控件总开关”和“导航栏/工具栏总开关”仍作为组级总开关。选择“跟随全局”会删除该 App 的单项覆盖规则。"
+        @"应用独立界面开关优先于单个全局开关；“标准界面元素总开关”和“导航栏与工具栏总开关”仍作为分类总开关。选择“跟随全局”会删除该应用的单项覆盖规则。"
         forKey:@"footerText"];
     [items addObject:appSwitchGroup];
 
     [items addObject:
-        [self switchSpecifierWithName:@"启用 App 独立界面开关"
+        [self switchSpecifierWithName:@"启用应用独立界面开关"
                                   key:@"EnableAppComponentSwitchOverrides"
                          defaultValue:YES]];
 
@@ -361,7 +361,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:switchSummary];
 
     PSSpecifier *editSwitch =
-        [PSSpecifier preferenceSpecifierNamed:@"添加 / 修改 App 界面开关"
+        [PSSpecifier preferenceSpecifierNamed:@"添加 / 修改应用界面开关"
                                        target:self
                                           set:nil
                                           get:nil
@@ -373,7 +373,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:editSwitch];
 
     PSSpecifier *removeSwitch =
-        [PSSpecifier preferenceSpecifierNamed:@"删除 App 界面开关"
+        [PSSpecifier preferenceSpecifierNamed:@"删除应用界面开关"
                                        target:self
                                           set:nil
                                           get:nil
@@ -385,7 +385,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:removeSwitch];
 
     PSSpecifier *clearSwitches =
-        [PSSpecifier preferenceSpecifierNamed:@"清空全部 App 界面开关"
+        [PSSpecifier preferenceSpecifierNamed:@"清空全部应用界面开关"
                                        target:self
                                           set:nil
                                           get:nil
@@ -400,17 +400,17 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     PSSpecifier *compatGroup =
         [PSSpecifier groupSpecifierWithName:@"兼容模式"];
     [compatGroup setProperty:
-        @"用于 App Store、Safari 等不完全跟随普通 UIKit tint 的系统 App。建议默认关闭，需要时逐项开启。"
+        @"用于 App Store、Safari 等不完全跟随普通系统强调色的应用。建议保持默认关闭，只有普通改色无效时再逐项开启。"
         forKey:@"footerText"];
     [items addObject:compatGroup];
 
     [items addObject:
-        [self switchSpecifierWithName:@"替换 System Blue"
+        [self switchSpecifierWithName:@"替换系统蓝色"
                                   key:@"ReplaceSystemBlue"
                          defaultValue:NO]];
 
     [items addObject:
-        [self switchSpecifierWithName:@"替换 Link Color"
+        [self switchSpecifierWithName:@"替换链接颜色"
                                   key:@"ReplaceLinkColor"
                          defaultValue:NO]];
 
@@ -434,13 +434,13 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
 
     [items addObject:
-        [self switchSpecifierWithName:@"UI 元素检查器"
+        [self switchSpecifierWithName:@"界面元素检查器"
                                   key:@"ElementInspector"
                          defaultValue:NO]];
 
     PSSpecifier *debugHelp = [PSSpecifier emptyGroupSpecifier];
     [debugHelp setProperty:
-        @"“注入测试边框”仅用于确认当前进程中的 GlobalTint 窗口处理是否运行，测试后建议关闭。“强制替换已解析蓝色”用于少数仍直接写入系统蓝色的 UIKit 元素。开启“UI 元素检查器”后，目标 App 右上角会显示紫色 GT；点 GT，再点需要检查的 UI，即可生成视图层级与颜色报告并自动复制到剪贴板。检查器采用独立透明 UIWindowScene 覆盖层，不再使用长按或 sendEvent 事件 Hook。"
+        @"“注入测试边框”只用于确认 GlobalTint 是否已在当前应用中运行，测试后建议关闭。“强制替换已解析蓝色”用于少数仍固定使用系统蓝色的界面元素。开启“界面元素检查器”后，应用右上角会显示紫色 GT；点 GT，再点要检查的位置，即可生成界面层级与颜色报告并自动复制到剪贴板。"
         forKey:@"footerText"];
     [items addObject:debugHelp];
 
@@ -451,98 +451,98 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
     PSSpecifier *colorHelp = [PSSpecifier emptyGroupSpecifier];
     [colorHelp setProperty:
-        @"关闭“组件独立颜色”时，下面所有组件都会跟随主主题色；开启后，没有单独设置颜色的组件仍会自动跟随主色。"
+        @"关闭“各界面独立颜色”时，下面所有界面元素都跟随主主题色；开启后，没有单独设置颜色的项目仍会自动跟随主色。"
         forKey:@"footerText"];
     [items addObject:colorHelp];
 
     // Component colors
     PSSpecifier *controlColors =
-        [PSSpecifier groupSpecifierWithName:@"控件颜色"];
+        [PSSpecifier groupSpecifierWithName:@"界面元素颜色"];
     [items addObject:controlColors];
 
     [items addObject:
-        [self colorButtonWithName:@"Window Tint"
+        [self colorButtonWithName:@"应用整体强调色"
                               key:@"WindowColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseWindowColor)]];
 
     [items addObject:
-        [self colorButtonWithName:@"Switch"
+        [self colorButtonWithName:@"开关按钮"
                               key:@"SwitchColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseSwitchColor)]];
 
     [items addObject:
-        [self colorButtonWithName:@"Slider"
+        [self colorButtonWithName:@"滑动条 / 音量进度条"
                               key:@"SliderColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseSliderColor)]];
 
     [items addObject:
-        [self colorButtonWithName:@"Progress"
+        [self colorButtonWithName:@"进度条"
                               key:@"ProgressColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseProgressColor)]];
 
     [items addObject:
-        [self colorButtonWithName:@"SegmentedControl"
+        [self colorButtonWithName:@"分段选择按钮"
                               key:@"SegmentedColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseSegmentedColor)]];
 
     [items addObject:
-        [self colorButtonWithName:@"PageControl"
+        [self colorButtonWithName:@"页面圆点指示器"
                               key:@"PageControlColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(choosePageControlColor)]];
 
     [items addObject:
-        [self colorButtonWithName:@"RefreshControl"
+        [self colorButtonWithName:@"下拉刷新指示器"
                               key:@"RefreshControlColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseRefreshControlColor)]];
 
     PSSpecifier *barColors =
-        [PSSpecifier groupSpecifierWithName:@"导航 / Bar 颜色"];
+        [PSSpecifier groupSpecifierWithName:@"导航栏与工具栏颜色"];
     [items addObject:barColors];
 
     [items addObject:
-        [self colorButtonWithName:@"NavigationBar"
+        [self colorButtonWithName:@"顶部导航栏"
                               key:@"NavigationBarColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseNavigationBarColor)]];
 
     [items addObject:
-        [self colorButtonWithName:@"TabBar"
+        [self colorButtonWithName:@"底部标签栏"
                               key:@"TabBarColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseTabBarColor)]];
 
     [items addObject:
-        [self colorButtonWithName:@"Toolbar"
+        [self colorButtonWithName:@"工具栏"
                               key:@"ToolbarColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseToolbarColor)]];
 
     [items addObject:
-        [self colorButtonWithName:@"SearchBar"
+        [self colorButtonWithName:@"搜索栏"
                               key:@"SearchBarColor"
                      defaultValue:@""
                     allowInherit:YES
                            action:@selector(chooseSearchBarColor)]];
 
     PSSpecifier *clearColors =
-        [PSSpecifier preferenceSpecifierNamed:@"清除全部组件独立颜色"
+        [PSSpecifier preferenceSpecifierNamed:@"清除全部独立界面颜色"
                                        target:self
                                           set:nil
                                           get:nil
@@ -554,9 +554,9 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
     // Component switches
     PSSpecifier *controlSwitches =
-        [PSSpecifier groupSpecifierWithName:@"控件开关"];
+        [PSSpecifier groupSpecifierWithName:@"界面元素开关"];
     [controlSwitches setProperty:
-        @"“标准控件总开关”关闭时，下面所有 UIKit 控件都会停止强制改色。"
+        @"“标准界面元素总开关”关闭时，下面所有常见按钮、开关、滑动条、进度条等界面元素都会停止强制改色。"
         forKey:@"footerText"];
     [items addObject:controlSwitches];
 
@@ -566,7 +566,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                          defaultValue:YES]];
 
     [items addObject:
-        [self switchSpecifierWithName:@"标准控件总开关"
+        [self switchSpecifierWithName:@"标准界面元素总开关"
                                   key:@"ApplyControls"
                          defaultValue:YES]];
 
@@ -601,14 +601,14 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                          defaultValue:YES]];
 
     PSSpecifier *barSwitches =
-        [PSSpecifier groupSpecifierWithName:@"导航 / Bar 开关"];
+        [PSSpecifier groupSpecifierWithName:@"导航栏与工具栏开关"];
     [barSwitches setProperty:
-        @"“导航栏/工具栏总开关”关闭时，下面所有 Navigation / Tab / Toolbar / SearchBar 都会停止强制改色。"
+        @"“导航栏与工具栏总开关”关闭时，下面的顶部导航栏、底部标签栏、工具栏和搜索栏都会停止强制改色。"
         forKey:@"footerText"];
     [items addObject:barSwitches];
 
     [items addObject:
-        [self switchSpecifierWithName:@"Bar 总开关"
+        [self switchSpecifierWithName:@"导航栏与工具栏总开关"
                                   key:@"ApplyBars"
                          defaultValue:YES]];
 
@@ -634,9 +634,9 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
     // App exclusions
     PSSpecifier *exclusions =
-        [PSSpecifier groupSpecifierWithName:@"App 排除"];
+        [PSSpecifier groupSpecifierWithName:@"应用排除"];
     [exclusions setProperty:
-        @"输入要排除的 Bundle ID，多个项目用逗号分隔。例如：com.tencent.xin, com.apple.mobilesafari。仅对已经被 Relaxin / RootHide 注入 tweak 的进程生效。"
+        @"输入要排除的应用标识（Bundle ID），多个项目用逗号分隔。例如：com.tencent.xin, com.apple.mobilesafari。被排除的应用不会应用 GlobalTint 改色。"
         forKey:@"footerText"];
     [items addObject:exclusions];
 
@@ -651,7 +651,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:excludedValue];
 
     PSSpecifier *editExclusions =
-        [PSSpecifier preferenceSpecifierNamed:@"编辑排除 Bundle ID"
+        [PSSpecifier preferenceSpecifierNamed:@"编辑排除的应用标识（Bundle ID）"
                                        target:self
                                           set:nil
                                           get:nil
@@ -675,7 +675,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     // Reset
     PSSpecifier *resetGroup = [PSSpecifier emptyGroupSpecifier];
     [resetGroup setProperty:
-        @"V0.3.4 完善 App 配置管理器的图标、搜索与状态展示。当前仍以 UIKit 公共控件为主，SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
+        @"V0.4.4 继续保持 V0.4.2 的安全隔离架构：GlobalTint 只在普通应用中运行，不注入 SpringBoard。当前主要覆盖常见系统界面元素；系统桌面与控制中心功能将在独立模块中开发。"
         forKey:@"footerText"];
     [items addObject:resetGroup];
 
@@ -758,67 +758,67 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 - (void)chooseWindowColor {
     [self presentColorPickerForKey:@"WindowColor"
                       defaultValue:@""
-                             title:@"Window Tint"];
+                             title:@"应用整体强调色"];
 }
 
 - (void)chooseSwitchColor {
     [self presentColorPickerForKey:@"SwitchColor"
                       defaultValue:@""
-                             title:@"Switch"];
+                             title:@"开关按钮"];
 }
 
 - (void)chooseSliderColor {
     [self presentColorPickerForKey:@"SliderColor"
                       defaultValue:@""
-                             title:@"Slider"];
+                             title:@"滑动条 / 音量进度条"];
 }
 
 - (void)chooseProgressColor {
     [self presentColorPickerForKey:@"ProgressColor"
                       defaultValue:@""
-                             title:@"Progress"];
+                             title:@"进度条"];
 }
 
 - (void)chooseSegmentedColor {
     [self presentColorPickerForKey:@"SegmentedColor"
                       defaultValue:@""
-                             title:@"SegmentedControl"];
+                             title:@"分段选择按钮"];
 }
 
 - (void)choosePageControlColor {
     [self presentColorPickerForKey:@"PageControlColor"
                       defaultValue:@""
-                             title:@"PageControl"];
+                             title:@"页面圆点指示器"];
 }
 
 - (void)chooseRefreshControlColor {
     [self presentColorPickerForKey:@"RefreshControlColor"
                       defaultValue:@""
-                             title:@"RefreshControl"];
+                             title:@"下拉刷新指示器"];
 }
 
 - (void)chooseNavigationBarColor {
     [self presentColorPickerForKey:@"NavigationBarColor"
                       defaultValue:@""
-                             title:@"NavigationBar"];
+                             title:@"顶部导航栏"];
 }
 
 - (void)chooseTabBarColor {
     [self presentColorPickerForKey:@"TabBarColor"
                       defaultValue:@""
-                             title:@"TabBar"];
+                             title:@"底部标签栏"];
 }
 
 - (void)chooseToolbarColor {
     [self presentColorPickerForKey:@"ToolbarColor"
                       defaultValue:@""
-                             title:@"Toolbar"];
+                             title:@"工具栏"];
 }
 
 - (void)chooseSearchBarColor {
     [self presentColorPickerForKey:@"SearchBarColor"
                       defaultValue:@""
-                             title:@"SearchBar"];
+                             title:@"搜索栏"];
 }
 
 - (void)colorPickerViewControllerDidSelectColor:
@@ -1014,7 +1014,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
         picker.delegate = self;
         picker.supportsAlpha = NO;
         picker.title =
-            [NSString stringWithFormat:@"App 主色 · %@", normalized];
+            [NSString stringWithFormat:@"应用主色 · %@", normalized];
         picker.selectedColor = GTColorFromHexString(hex);
 
         [self presentViewController:picker
@@ -1025,8 +1025,8 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
 - (void)addOrEditAppColorOverride {
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"添加 / 修改 App 主色"
-                                            message:@"输入 App 的 Bundle ID。下一步会打开系统颜色选择器。"
+        [UIAlertController alertControllerWithTitle:@"添加 / 修改应用主色"
+                                            message:@"输入应用标识（Bundle ID）。下一步会打开系统颜色选择器。"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addTextFieldWithConfigurationHandler:
@@ -1076,7 +1076,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
     if (profiles.count == 0) {
         UIAlertController *empty =
-            [UIAlertController alertControllerWithTitle:@"没有 App 独立主色"
+            [UIAlertController alertControllerWithTitle:@"没有应用独立主色"
                                                 message:@"当前没有可删除的配置。"
                                          preferredStyle:UIAlertControllerStyleAlert];
 
@@ -1092,8 +1092,8 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     }
 
     UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:@"删除 App 主色"
-                                            message:@"选择要删除的 App 配置"
+        [UIAlertController alertControllerWithTitle:@"删除应用主色"
+                                            message:@"选择要删除的应用配置"
                                      preferredStyle:UIAlertControllerStyleActionSheet];
 
     NSArray<NSString *> *bundleIDs =
@@ -1162,8 +1162,8 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     }
 
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"清空 App 独立主色"
-                                            message:@"删除全部 App 独立主色配置？"
+        [UIAlertController alertControllerWithTitle:@"清空应用独立主色"
+                                            message:@"删除全部应用独立主色配置？"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addAction:
@@ -1208,17 +1208,17 @@ appComponentColorOverrides {
 
 - (NSDictionary<NSString *, NSString *> *)appComponentNames {
     return @{
-        @"WindowColor": @"Window",
-        @"SwitchColor": @"Switch",
-        @"SliderColor": @"Slider",
-        @"ProgressColor": @"Progress",
-        @"SegmentedColor": @"SegmentedControl",
-        @"PageControlColor": @"PageControl",
-        @"RefreshControlColor": @"RefreshControl",
-        @"NavigationBarColor": @"NavigationBar",
-        @"TabBarColor": @"TabBar",
-        @"ToolbarColor": @"Toolbar",
-        @"SearchBarColor": @"SearchBar"
+        @"WindowColor": @"应用整体强调色",
+        @"SwitchColor": @"开关按钮",
+        @"SliderColor": @"滑动条 / 音量进度条",
+        @"ProgressColor": @"进度条",
+        @"SegmentedColor": @"分段选择按钮",
+        @"PageControlColor": @"页面圆点指示器",
+        @"RefreshControlColor": @"下拉刷新指示器",
+        @"NavigationBarColor": @"顶部导航栏",
+        @"TabBarColor": @"底部标签栏",
+        @"ToolbarColor": @"工具栏",
+        @"SearchBarColor": @"搜索栏"
     };
 }
 
@@ -1388,8 +1388,8 @@ appComponentColorOverrides {
 
 - (void)addOrEditAppComponentColorOverride {
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"App 组件颜色"
-                                            message:@"输入 Bundle ID，然后选择要单独改色的组件。"
+        [UIAlertController alertControllerWithTitle:@"应用界面颜色"
+                                            message:@"输入应用标识（Bundle ID），然后选择要单独改色的界面位置。"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addTextFieldWithConfigurationHandler:
@@ -1472,7 +1472,7 @@ appComponentColorOverrides {
     if (entries.count == 0) {
         UIAlertController *empty =
             [UIAlertController alertControllerWithTitle:@"没有组件规则"
-                                                message:@"当前没有可删除的 App 独立组件颜色。"
+                                                message:@"当前没有可删除的应用独立界面颜色。"
                                          preferredStyle:UIAlertControllerStyleAlert];
 
         [empty addAction:
@@ -1503,7 +1503,7 @@ appComponentColorOverrides {
     }];
 
     UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:@"删除 App 界面颜色"
+        [UIAlertController alertControllerWithTitle:@"删除应用界面颜色"
                                             message:nil
                                      preferredStyle:UIAlertControllerStyleActionSheet];
 
@@ -1593,8 +1593,8 @@ appComponentColorOverrides {
     }
 
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"清空 App 组件颜色"
-                                            message:@"删除全部 App 独立组件颜色配置？"
+        [UIAlertController alertControllerWithTitle:@"清空应用界面颜色"
+                                            message:@"删除全部应用独立界面颜色配置？"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addAction:
@@ -1643,32 +1643,32 @@ appComponentSwitchOverrides {
 - (NSDictionary<NSString *, NSString *> *)appComponentSwitchNames {
     return @{
         @"Window": @"应用整体强调色",
-        @"Switch": @"开关按钮",
-        @"Slider": @"滑动条 / 音量进度条",
-        @"Progress": @"进度条",
+        @"开关按钮": @"开关按钮",
+        @"滑动条 / 音量进度条": @"滑动条 / 音量进度条",
+        @"进度条": @"进度条",
         @"Segmented": @"分段选择按钮",
-        @"PageControl": @"页面圆点指示器",
-        @"RefreshControl": @"下拉刷新指示器",
-        @"NavigationBar": @"顶部导航栏",
-        @"TabBar": @"底部标签栏",
-        @"Toolbar": @"工具栏",
-        @"SearchBar": @"搜索栏"
+        @"页面圆点指示器": @"页面圆点指示器",
+        @"下拉刷新指示器": @"下拉刷新指示器",
+        @"顶部导航栏": @"顶部导航栏",
+        @"底部标签栏": @"底部标签栏",
+        @"工具栏": @"工具栏",
+        @"搜索栏": @"搜索栏"
     };
 }
 
 - (NSArray<NSString *> *)orderedAppComponentSwitchKeys {
     return @[
         @"Window",
-        @"Switch",
-        @"Slider",
-        @"Progress",
+        @"开关按钮",
+        @"滑动条 / 音量进度条",
+        @"进度条",
         @"Segmented",
-        @"PageControl",
-        @"RefreshControl",
-        @"NavigationBar",
-        @"TabBar",
-        @"Toolbar",
-        @"SearchBar"
+        @"页面圆点指示器",
+        @"下拉刷新指示器",
+        @"顶部导航栏",
+        @"底部标签栏",
+        @"工具栏",
+        @"搜索栏"
     ];
 }
 
@@ -1857,8 +1857,8 @@ appComponentSwitchOverrides {
 
 - (void)addOrEditAppComponentSwitchOverride {
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"App 组件开关"
-                                            message:@"输入 Bundle ID，然后选择组件以及强制开启 / 强制关闭 / 跟随全局。"
+        [UIAlertController alertControllerWithTitle:@"应用界面开关"
+                                            message:@"输入应用标识（Bundle ID），然后选择界面位置，并设置为强制开启、强制关闭或跟随全局。"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addTextFieldWithConfigurationHandler:
@@ -1941,7 +1941,7 @@ appComponentSwitchOverrides {
     if (entries.count == 0) {
         UIAlertController *empty =
             [UIAlertController alertControllerWithTitle:@"没有开关规则"
-                                                message:@"当前没有可删除的 App 独立组件开关。"
+                                                message:@"当前没有可删除的应用独立界面开关。"
                                          preferredStyle:UIAlertControllerStyleAlert];
 
         [empty addAction:
@@ -1972,7 +1972,7 @@ appComponentSwitchOverrides {
     }];
 
     UIAlertController *sheet =
-        [UIAlertController alertControllerWithTitle:@"删除 App 界面开关"
+        [UIAlertController alertControllerWithTitle:@"删除应用界面开关"
                                             message:nil
                                      preferredStyle:UIAlertControllerStyleActionSheet];
 
@@ -2030,8 +2030,8 @@ appComponentSwitchOverrides {
     }
 
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"清空 App 组件开关"
-                                            message:@"删除全部 App 独立组件开关配置？"
+        [UIAlertController alertControllerWithTitle:@"清空应用界面开关"
+                                            message:@"删除全部应用独立界面开关配置？"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addAction:
@@ -2103,8 +2103,8 @@ appComponentSwitchOverrides {
     }
 
     UIAlertController *alert =
-        [UIAlertController alertControllerWithTitle:@"排除 App"
-                                            message:@"输入 Bundle ID，多个项目用逗号分隔。"
+        [UIAlertController alertControllerWithTitle:@"排除应用"
+                                            message:@"输入应用标识（Bundle ID），多个项目用逗号分隔。"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addTextFieldWithConfigurationHandler:^(UITextField *textField) {
@@ -2155,7 +2155,7 @@ appComponentSwitchOverrides {
 - (void)resetPreferences {
     UIAlertController *alert =
         [UIAlertController alertControllerWithTitle:@"恢复默认设置"
-                                            message:@"将主色、App 独立主色、App 独立组件颜色、App 独立组件开关、全局组件颜色、组件开关以及 App 排除列表全部恢复为默认值。"
+                                            message:@"将主色、应用独立主色、应用独立界面颜色、应用独立界面开关、全局界面颜色、界面开关以及应用排除列表全部恢复为默认值。"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addAction:
