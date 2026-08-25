@@ -38,6 +38,7 @@ static BOOL GTEnableSearchBar = YES;
 // Color mode
 static BOOL GTUseSeparateColors = NO;
 static BOOL GTEnableAppColorOverrides = YES;
+static BOOL GTEnableAppComponentSwitchOverrides = YES;
 
 // Compatibility / diagnostics
 static BOOL GTReplaceSystemBlue = NO;
@@ -66,6 +67,7 @@ static NSString *GTSearchBarHex = @"";
 static NSString *GTExcludedBundleIDs = @"";
 static NSDictionary<NSString *, NSString *> *GTAppColorOverrides = nil;
 static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *GTAppComponentColorOverrides = nil;
+static NSDictionary<NSString *, NSDictionary<NSString *, NSNumber *> *> *GTAppComponentSwitchOverrides = nil;
 
 static UIColor *GTAccentColor = nil;
 
@@ -182,6 +184,53 @@ static UIColor *GTCurrentAppAccentColor(void) {
     UIColor *overrideColor = GTColorFromHexOrNil(overrideHex);
 
     return overrideColor ?: globalAccent;
+}
+
+static NSNumber *
+GTCurrentAppComponentSwitchOverride(NSString *componentKey) {
+    if (!GTEnableAppComponentSwitchOverrides ||
+        componentKey.length == 0 ||
+        GTAppComponentSwitchOverrides.count == 0) {
+        return nil;
+    }
+
+    NSString *bundleID = GTCurrentBundleIdentifier();
+
+    if (bundleID.length == 0) {
+        return nil;
+    }
+
+    NSDictionary<NSString *, NSNumber *> *appRules =
+        GTAppComponentSwitchOverrides[bundleID];
+
+    if (![appRules isKindOfClass:[NSDictionary class]]) {
+        return nil;
+    }
+
+    id value = appRules[componentKey];
+
+    if (![value respondsToSelector:@selector(boolValue)]) {
+        return nil;
+    }
+
+    return @([value boolValue]);
+}
+
+static BOOL GTShouldApplyComponent(NSString *componentKey,
+                                   BOOL globalComponentEnabled,
+                                   BOOL groupEnabled) {
+    if (!GTShouldApplyBase() || !groupEnabled) {
+        return NO;
+    }
+
+    NSNumber *appOverride =
+        GTCurrentAppComponentSwitchOverride(componentKey);
+
+    if (appOverride) {
+        return appOverride.boolValue;
+    }
+
+    return globalComponentEnabled;
 }
 
 static NSString *
@@ -1303,17 +1352,14 @@ static void GTApplyWindow(UIWindow *window) {
         return;
     }
 
-    BOOL apply = GTShouldApplyBase() && GTEnableWindowTint;
+    BOOL apply = GTShouldApplyComponent(@"Window", GTEnableWindowTint, YES);
     GTApplyOrRestoreTint(window, apply, GTColorForComponent(@"WindowColor", GTWindowHex));
     GTApplyDebugBorder(window);
     GTUpdateSceneInspectorForSourceWindow(window);
 }
 
 static void GTApplySwitchControl(UISwitch *control) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyControls &&
-        GTEnableSwitch;
+    BOOL apply = GTShouldApplyComponent(@"Switch", GTEnableSwitch, GTApplyControls);
 
     UIColor *color = GTColorForComponent(@"SwitchColor", GTSwitchHex);
 
@@ -1331,10 +1377,7 @@ static void GTApplySwitchControl(UISwitch *control) {
 }
 
 static void GTApplySliderControl(UISlider *control) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyControls &&
-        GTEnableSlider;
+    BOOL apply = GTShouldApplyComponent(@"Slider", GTEnableSlider, GTApplyControls);
 
     UIColor *color = GTColorForComponent(@"SliderColor", GTSliderHex);
 
@@ -1356,10 +1399,7 @@ static void GTApplySliderControl(UISlider *control) {
 }
 
 static void GTApplyProgressControl(UIProgressView *control) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyControls &&
-        GTEnableProgress;
+    BOOL apply = GTShouldApplyComponent(@"Progress", GTEnableProgress, GTApplyControls);
 
     UIColor *color = GTColorForComponent(@"ProgressColor", GTProgressHex);
 
@@ -1377,10 +1417,7 @@ static void GTApplyProgressControl(UIProgressView *control) {
 }
 
 static void GTApplySegmentedControl(UISegmentedControl *control) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyControls &&
-        GTEnableSegmented;
+    BOOL apply = GTShouldApplyComponent(@"Segmented", GTEnableSegmented, GTApplyControls);
 
     UIColor *color = GTColorForComponent(@"SegmentedColor", GTSegmentedHex);
 
@@ -1402,10 +1439,7 @@ static void GTApplySegmentedControl(UISegmentedControl *control) {
 }
 
 static void GTApplyPageControl(UIPageControl *control) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyControls &&
-        GTEnablePageControl;
+    BOOL apply = GTShouldApplyComponent(@"PageControl", GTEnablePageControl, GTApplyControls);
 
     UIColor *color = GTColorForComponent(@"PageControlColor", GTPageControlHex);
 
@@ -1423,10 +1457,7 @@ static void GTApplyPageControl(UIPageControl *control) {
 }
 
 static void GTApplyRefreshControl(UIRefreshControl *control) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyControls &&
-        GTEnableRefreshControl;
+    BOOL apply = GTShouldApplyComponent(@"RefreshControl", GTEnableRefreshControl, GTApplyControls);
 
     GTApplyOrRestoreTint(control,
                          apply,
@@ -1434,10 +1465,7 @@ static void GTApplyRefreshControl(UIRefreshControl *control) {
 }
 
 static void GTApplyNavigationBar(UINavigationBar *bar) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyBars &&
-        GTEnableNavigationBar;
+    BOOL apply = GTShouldApplyComponent(@"NavigationBar", GTEnableNavigationBar, GTApplyBars);
 
     GTApplyOrRestoreTint(bar,
                          apply,
@@ -1645,10 +1673,7 @@ static void GTRestoreTabBarAppearances(UITabBar *bar) {
 }
 
 static void GTApplyTabBar(UITabBar *bar) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyBars &&
-        GTEnableTabBar;
+    BOOL apply = GTShouldApplyComponent(@"TabBar", GTEnableTabBar, GTApplyBars);
 
     UIColor *color = GTColorForComponent(@"TabBarColor", GTTabBarHex);
 
@@ -1709,10 +1734,7 @@ static void GTApplyTabBar(UITabBar *bar) {
 }
 
 static void GTApplyToolbar(UIToolbar *bar) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyBars &&
-        GTEnableToolbar;
+    BOOL apply = GTShouldApplyComponent(@"Toolbar", GTEnableToolbar, GTApplyBars);
 
     GTApplyOrRestoreTint(bar,
                          apply,
@@ -1720,10 +1742,7 @@ static void GTApplyToolbar(UIToolbar *bar) {
 }
 
 static void GTApplySearchBar(UISearchBar *bar) {
-    BOOL apply =
-        GTShouldApplyBase() &&
-        GTApplyBars &&
-        GTEnableSearchBar;
+    BOOL apply = GTShouldApplyComponent(@"SearchBar", GTEnableSearchBar, GTApplyBars);
 
     GTApplyOrRestoreTint(bar,
                          apply,
@@ -2402,6 +2421,74 @@ GTNormalizedAppComponentColorOverrides(NSDictionary *source) {
     return [result copy];
 }
 
+static NSDictionary<NSString *,
+                            NSDictionary<NSString *, NSNumber *> *> *
+GTNormalizedAppComponentSwitchOverrides(NSDictionary *source) {
+    if (![source isKindOfClass:[NSDictionary class]] ||
+        source.count == 0) {
+        return @{};
+    }
+
+    NSSet<NSString *> *allowedKeys =
+        [NSSet setWithArray:@[
+            @"Window",
+            @"Switch",
+            @"Slider",
+            @"Progress",
+            @"Segmented",
+            @"PageControl",
+            @"RefreshControl",
+            @"NavigationBar",
+            @"TabBar",
+            @"Toolbar",
+            @"SearchBar"
+        ]];
+
+    NSMutableDictionary *result =
+        [NSMutableDictionary dictionary];
+
+    [source enumerateKeysAndObjectsUsingBlock:
+        ^(id rawBundleID, id rawRules, BOOL *stop) {
+
+        if (![rawBundleID isKindOfClass:[NSString class]] ||
+            ![rawRules isKindOfClass:[NSDictionary class]]) {
+            return;
+        }
+
+        NSString *bundleID =
+            [[(NSString *)rawBundleID
+              stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]]
+             lowercaseString];
+
+        if (bundleID.length == 0) {
+            return;
+        }
+
+        NSMutableDictionary<NSString *, NSNumber *> *rules =
+            [NSMutableDictionary dictionary];
+
+        [(NSDictionary *)rawRules enumerateKeysAndObjectsUsingBlock:
+            ^(id rawKey, id rawValue, BOOL *innerStop) {
+
+            if (![rawKey isKindOfClass:[NSString class]] ||
+                ![allowedKeys containsObject:(NSString *)rawKey] ||
+                ![rawValue respondsToSelector:@selector(boolValue)]) {
+                return;
+            }
+
+            rules[(NSString *)rawKey] =
+                @([rawValue boolValue]);
+        }];
+
+        if (rules.count > 0) {
+            result[bundleID] = [rules copy];
+        }
+    }];
+
+    return [result copy];
+}
+
 static void GTLoadPreferencesFromDisk(void) {
     if (!GTPreferences) {
         return;
@@ -2428,6 +2515,9 @@ static void GTLoadPreferencesFromDisk(void) {
 
     GTEnableAppColorOverrides =
         GTBoolPreference(@"EnableAppColorOverrides", YES);
+
+    GTEnableAppComponentSwitchOverrides =
+        GTBoolPreference(@"EnableAppComponentSwitchOverrides", YES);
 
     GTReplaceSystemBlue =
         GTBoolPreference(@"ReplaceSystemBlue", NO);
@@ -2526,6 +2616,11 @@ static void GTLoadPreferencesFromDisk(void) {
             GTDictionaryPreference(@"AppComponentColorOverrides")
         );
 
+    GTAppComponentSwitchOverrides =
+        GTNormalizedAppComponentSwitchOverrides(
+            GTDictionaryPreference(@"AppComponentSwitchOverrides")
+        );
+
     GTAccentColor =
         GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
 
@@ -2563,6 +2658,7 @@ static void GTRegisterPreferences(void) {
         @"ApplyBars": @YES,
         @"UseSeparateColors": @NO,
         @"EnableAppColorOverrides": @YES,
+        @"EnableAppComponentSwitchOverrides": @YES,
         @"ReplaceSystemBlue": @NO,
         @"ReplaceLinkColor": @NO,
         @"DebugInjectionBorder": @NO,
@@ -2593,7 +2689,8 @@ static void GTRegisterPreferences(void) {
         @"SearchBarColor": @"",
         @"ExcludedBundleIDs": @"",
         @"AppColorOverrides": @{},
-        @"AppComponentColorOverrides": @{}
+        @"AppComponentColorOverrides": @{},
+        @"AppComponentSwitchOverrides": @{}
     }];
 
     GTLoadPreferencesFromDisk();

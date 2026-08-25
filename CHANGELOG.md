@@ -1,5 +1,33 @@
 # GlobalTint Changelog
 
+## 0.3.2
+
+- Added per-App component enable/disable overrides.
+- New `EnableAppComponentSwitchOverrides` master preference, enabled by default.
+- New `AppComponentSwitchOverrides` nested dictionary:
+  `bundleID -> componentKey -> bool`.
+- Supported per-App switch keys:
+  - Window
+  - Switch
+  - Slider
+  - Progress
+  - Segmented
+  - PageControl
+  - RefreshControl
+  - NavigationBar
+  - TabBar
+  - Toolbar
+  - SearchBar
+- Enable precedence:
+  1. `Enabled` and App exclusion remain absolute global gates.
+  2. `ApplyControls` / `ApplyBars` remain group-level master gates.
+  3. matching per-App component switch override
+  4. global individual component switch
+- Settings UI can add/update a rule as `强制开启`, `强制关闭`, or `跟随全局`.
+- Added rule count, individual deletion, and clear-all controls.
+- Existing V0.3.1 per-App component colors and V0.3.0 per-App accent profiles
+  remain unchanged.
+
 ## 0.3.1
 
 - Added per-App component color overrides.

@@ -259,3 +259,11 @@ colors are enabled.
 V0.3.1 adds per-App component color rules. When separate component colors are
 enabled, a matching per-App component rule overrides the global component
 color, then falls back to the App accent and finally the global accent.
+
+
+## V0.3.2
+
+V0.3.2 adds per-App component enable/disable rules. A matching App rule can
+override an individual global component switch, while the Controls/Bars master
+switches remain group-level hard gates. Choosing “follow global” removes the
+per-App rule for that component.
