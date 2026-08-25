@@ -2,6 +2,7 @@
 #import <Cephei/HBPreferences.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
+#import <QuartzCore/QuartzCore.h>
 
 
 @interface BrowserToolbar : UIView
@@ -43,6 +44,7 @@ static BOOL GTReplaceSystemBlue = NO;
 static BOOL GTReplaceLinkColor = NO;
 static BOOL GTDebugInjectionBorder = NO;
 static BOOL GTForceResolvedBlue = NO;
+static BOOL GTElementInspector = NO;
 static NSString *GTSemanticBlueHex = @"";
 
 // Preferences strings
@@ -83,6 +85,7 @@ static char GTOriginalWindowBorderWidthKey;
 static char GTOriginalWindowBorderColorKey;
 static char GTOriginalResolvedTintKey;
 static char GTOriginalResolvedTextColorKey;
+static char GTInspectorGestureKey;
 
 static BOOL GTShouldApplyBase(void);
 
@@ -362,6 +365,299 @@ static void GTApplyOrRestoreTint(UIView *view,
     }
 }
 
+static NSString *GTInspectorDescribeColor(UIColor *color) {
+    if (!color) {
+        return @"nil";
+    }
+
+    CGFloat r = 0.0, g = 0.0, b = 0.0, a = 0.0;
+
+    if ([color getRed:&r green:&g blue:&b alpha:&a]) {
+        return [NSString stringWithFormat:@"#%02lX%02lX%02lX a=%.2f",
+                (long)llround(MAX(0.0, MIN(1.0, r)) * 255.0),
+                (long)llround(MAX(0.0, MIN(1.0, g)) * 255.0),
+                (long)llround(MAX(0.0, MIN(1.0, b)) * 255.0),
+                a];
+    }
+
+    CGFloat white = 0.0;
+
+    if ([color getWhite:&white alpha:&a]) {
+        return [NSString stringWithFormat:@"gray=%.3f a=%.2f", white, a];
+    }
+
+    return color.description ?: @"<dynamic UIColor>";
+}
+
+static UIViewController *GTInspectorTopController(UIViewController *controller) {
+    if (!controller) {
+        return nil;
+    }
+
+    if (controller.presentedViewController) {
+        return GTInspectorTopController(controller.presentedViewController);
+    }
+
+    if ([controller isKindOfClass:[UINavigationController class]]) {
+        return GTInspectorTopController(
+            ((UINavigationController *)controller).visibleViewController
+        );
+    }
+
+    if ([controller isKindOfClass:[UITabBarController class]]) {
+        return GTInspectorTopController(
+            ((UITabBarController *)controller).selectedViewController
+        );
+    }
+
+    return controller;
+}
+
+static NSString *GTInspectorLayerDescription(CALayer *layer) {
+    if (!layer) {
+        return @"";
+    }
+
+    NSMutableArray<NSString *> *parts = [NSMutableArray array];
+
+    [parts addObject:
+        [NSString stringWithFormat:@"layer=%@",
+         NSStringFromClass(layer.class)]];
+
+    if (layer.backgroundColor) {
+        [parts addObject:
+            [NSString stringWithFormat:@"bg=%@",
+             GTInspectorDescribeColor(
+                 [UIColor colorWithCGColor:layer.backgroundColor]
+             )]];
+    }
+
+    if (layer.borderColor) {
+        [parts addObject:
+            [NSString stringWithFormat:@"border=%@",
+             GTInspectorDescribeColor(
+                 [UIColor colorWithCGColor:layer.borderColor]
+             )]];
+    }
+
+    if ([layer isKindOfClass:[CAShapeLayer class]]) {
+        CAShapeLayer *shape = (CAShapeLayer *)layer;
+
+        if (shape.fillColor) {
+            [parts addObject:
+                [NSString stringWithFormat:@"fill=%@",
+                 GTInspectorDescribeColor(
+                     [UIColor colorWithCGColor:shape.fillColor]
+                 )]];
+        }
+
+        if (shape.strokeColor) {
+            [parts addObject:
+                [NSString stringWithFormat:@"stroke=%@",
+                 GTInspectorDescribeColor(
+                     [UIColor colorWithCGColor:shape.strokeColor]
+                 )]];
+        }
+    }
+
+    return [parts componentsJoinedByString:@", "];
+}
+
+static NSString *GTInspectorViewDescription(UIView *view) {
+    if (!view) {
+        return @"<nil>";
+    }
+
+    NSMutableArray<NSString *> *parts = [NSMutableArray array];
+
+    [parts addObject:NSStringFromClass(view.class)];
+
+    [parts addObject:
+        [NSString stringWithFormat:@"frame=(%.0f,%.0f %.0fx%.0f)",
+         view.frame.origin.x,
+         view.frame.origin.y,
+         view.frame.size.width,
+         view.frame.size.height]];
+
+    [parts addObject:
+        [NSString stringWithFormat:@"tint=%@",
+         GTInspectorDescribeColor(view.tintColor)]];
+
+    if ([view isKindOfClass:[UILabel class]]) {
+        UILabel *label = (UILabel *)view;
+
+        [parts addObject:
+            [NSString stringWithFormat:@"textColor=%@",
+             GTInspectorDescribeColor(label.textColor)]];
+
+        if (label.text.length > 0) {
+            NSString *displayText = label.text;
+
+            if (displayText.length > 30) {
+                displayText =
+                    [[displayText substringToIndex:30]
+                     stringByAppendingString:@"…"];
+            }
+
+            [parts addObject:
+                [NSString stringWithFormat:@"text=\"%@\"", displayText]];
+        }
+    }
+
+    if ([view isKindOfClass:[UIImageView class]]) {
+        UIImageView *imageView = (UIImageView *)view;
+
+        if (imageView.image) {
+            [parts addObject:
+                [NSString stringWithFormat:@"imageMode=%ld",
+                 (long)imageView.image.renderingMode]];
+        }
+    }
+
+    NSString *layerInfo = GTInspectorLayerDescription(view.layer);
+
+    if (layerInfo.length > 0) {
+        [parts addObject:layerInfo];
+    }
+
+    return [parts componentsJoinedByString:@" | "];
+}
+
+static void GTInspectorPresent(UIWindow *window, UIView *hitView) {
+    if (!window || !hitView) {
+        return;
+    }
+
+    NSMutableString *report = [NSMutableString string];
+
+    [report appendFormat:@"Bundle: %@\n",
+     NSBundle.mainBundle.bundleIdentifier ?: @"(nil)"];
+
+    [report appendFormat:@"Hit class: %@\n\n",
+     NSStringFromClass(hitView.class)];
+
+    UIView *current = hitView;
+
+    for (NSInteger depth = 0; current && depth < 16; depth++) {
+        [report appendFormat:@"%ld. %@\n\n",
+         (long)depth,
+         GTInspectorViewDescription(current)];
+
+        current = current.superview;
+    }
+
+    if (hitView.layer.sublayers.count > 0) {
+        [report appendString:@"Hit-view sublayers:\n"];
+
+        NSInteger count = 0;
+
+        for (CALayer *layer in hitView.layer.sublayers) {
+            if (count >= 10) {
+                break;
+            }
+
+            [report appendFormat:@"- %@\n",
+             GTInspectorLayerDescription(layer)];
+
+            count++;
+        }
+    }
+
+    UIPasteboard.generalPasteboard.string = report;
+
+    UIViewController *presenter =
+        GTInspectorTopController(window.rootViewController);
+
+    if (!presenter) {
+        return;
+    }
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"GlobalTint UI Inspector"
+                                            message:report
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"关闭"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    [presenter presentViewController:alert
+                            animated:YES
+                          completion:nil];
+}
+
+@interface UIApplication (GlobalTintInspector)
+- (void)gt_handleGlobalTintInspector:
+    (UILongPressGestureRecognizer *)gesture;
+@end
+
+@implementation UIApplication (GlobalTintInspector)
+
+- (void)gt_handleGlobalTintInspector:
+    (UILongPressGestureRecognizer *)gesture {
+
+    if (gesture.state != UIGestureRecognizerStateBegan) {
+        return;
+    }
+
+    UIWindow *window = (UIWindow *)gesture.view;
+
+    if (![window isKindOfClass:[UIWindow class]]) {
+        return;
+    }
+
+    CGPoint point = [gesture locationInView:window];
+    UIView *hitView = [window hitTest:point withEvent:nil];
+
+    GTInspectorPresent(window, hitView);
+}
+
+@end
+
+static void GTUpdateInspectorGesture(UIWindow *window) {
+    if (!window) {
+        return;
+    }
+
+    UILongPressGestureRecognizer *gesture =
+        objc_getAssociatedObject(window, &GTInspectorGestureKey);
+
+    BOOL shouldEnable =
+        GTShouldApplyBase() &&
+        GTElementInspector;
+
+    if (shouldEnable && !gesture) {
+        gesture =
+            [[UILongPressGestureRecognizer alloc]
+             initWithTarget:UIApplication.sharedApplication
+             action:@selector(gt_handleGlobalTintInspector:)];
+
+        gesture.minimumPressDuration = 0.7;
+        gesture.numberOfTouchesRequired = 2;
+        gesture.cancelsTouchesInView = NO;
+        gesture.delaysTouchesBegan = NO;
+
+        [window addGestureRecognizer:gesture];
+
+        objc_setAssociatedObject(
+            window,
+            &GTInspectorGestureKey,
+            gesture,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    } else if (!shouldEnable && gesture) {
+        [window removeGestureRecognizer:gesture];
+
+        objc_setAssociatedObject(
+            window,
+            &GTInspectorGestureKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+}
+
 static void GTApplyDebugBorder(UIWindow *window) {
     if (!window) {
         return;
@@ -436,6 +732,7 @@ static void GTApplyWindow(UIWindow *window) {
     BOOL apply = GTShouldApplyBase() && GTEnableWindowTint;
     GTApplyOrRestoreTint(window, apply, GTColorForComponentHex(GTWindowHex));
     GTApplyDebugBorder(window);
+    GTUpdateInspectorGesture(window);
 }
 
 static void GTApplySwitchControl(UISwitch *control) {
@@ -1390,6 +1687,11 @@ static void GTRegisterPreferences(void) {
     [GTPreferences registerBool:&GTForceResolvedBlue
                          default:NO
                           forKey:@"ForceResolvedBlue"];
+
+
+    [GTPreferences registerBool:&GTElementInspector
+                         default:NO
+                          forKey:@"ElementInspector"];
 
     [GTPreferences registerBool:&GTEnableSwitch
                          default:YES

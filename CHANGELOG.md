@@ -1,5 +1,13 @@
 # GlobalTint Changelog
 
+## 0.2.7
+
+- Added an on-device UI element inspector for private UIKit / SwiftUI diagnosis.
+- Enable `UI 元素检查器`, then two-finger long-press a target element.
+- Shows the hit view class, parent view hierarchy, tint/text colors and common layer colors.
+- Copies the full inspector report to the clipboard automatically.
+- Diagnostic release: existing color behavior is otherwise unchanged from V0.2.6.
+
 ## 0.2.6
 
 - Fixed build failure caused by `-Werror,-Wunused-function`.
