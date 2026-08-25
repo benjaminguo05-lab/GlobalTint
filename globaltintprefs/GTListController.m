@@ -251,7 +251,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
     PSSpecifier *debugHelp = [PSSpecifier emptyGroupSpecifier];
     [debugHelp setProperty:
-        @"开启“注入测试边框”后，成功加载 GlobalTint 的 App 窗口四周会出现 3pt 主题色边框。测试完请关闭。“强制替换已解析蓝色”会拦截已经写入 UIView.tintColor / UILabel.textColor 的系统蓝，专门用于 App Store、Safari 等兼容场景。 开启“UI 元素检查器”后，在目标 App 内单指按住约 0.8 秒蓝色按钮或 Tab。开启“UI 元素检查器”后，目标 App 右上角会出现紫色 GT 浮动按钮。点 GT 进入检查模式，再点一下要检查的 Tab、Toolbar 或其他 UI；报告会显示真实类名、父视图链、tint/text/layer 颜色，并自动复制到剪贴板。"
+        @"开启“注入测试边框”后，成功加载 GlobalTint 的 App 窗口四周会出现 3pt 主题色边框。测试完请关闭。“强制替换已解析蓝色”会拦截已经写入 UIView.tintColor / UILabel.textColor 的系统蓝，专门用于 App Store、Safari 等兼容场景。 开启“UI 元素检查器”后，在目标 App 内单指按住约 0.8 秒蓝色按钮或 Tab。开启“UI 元素检查器”后，会创建一个独立的透明检查窗口，右上角显示紫色 GT 按钮，不会再被 App Store / Safari 自己的视图盖住。点 GT 后再点目标 UI，报告会显示真实类名、父视图链、tint/text/layer 颜色，并自动复制到剪贴板。"
         forKey:@"footerText"];
     [items addObject:debugHelp];
 
