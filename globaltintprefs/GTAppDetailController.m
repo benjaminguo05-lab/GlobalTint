@@ -416,57 +416,57 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
 
 - (void)chooseWindowColor {
     [self presentComponentColorPickerForKey:@"WindowColor"
-                                       name:@"Window"];
+                                       name:@"应用整体强调色"];
 }
 
 - (void)chooseSwitchColor {
     [self presentComponentColorPickerForKey:@"SwitchColor"
-                                       name:@"Switch"];
+                                       name:@"开关按钮"];
 }
 
 - (void)chooseSliderColor {
     [self presentComponentColorPickerForKey:@"SliderColor"
-                                       name:@"Slider"];
+                                       name:@"滑动条 / 音量进度条"];
 }
 
 - (void)chooseProgressColor {
     [self presentComponentColorPickerForKey:@"ProgressColor"
-                                       name:@"Progress"];
+                                       name:@"进度条"];
 }
 
 - (void)chooseSegmentedColor {
     [self presentComponentColorPickerForKey:@"SegmentedColor"
-                                       name:@"SegmentedControl"];
+                                       name:@"分段选择按钮"];
 }
 
 - (void)choosePageControlColor {
     [self presentComponentColorPickerForKey:@"PageControlColor"
-                                       name:@"PageControl"];
+                                       name:@"页面圆点指示器"];
 }
 
 - (void)chooseRefreshControlColor {
     [self presentComponentColorPickerForKey:@"RefreshControlColor"
-                                       name:@"RefreshControl"];
+                                       name:@"下拉刷新指示器"];
 }
 
 - (void)chooseNavigationBarColor {
     [self presentComponentColorPickerForKey:@"NavigationBarColor"
-                                       name:@"NavigationBar"];
+                                       name:@"顶部导航栏"];
 }
 
 - (void)chooseTabBarColor {
     [self presentComponentColorPickerForKey:@"TabBarColor"
-                                       name:@"TabBar"];
+                                       name:@"底部标签栏"];
 }
 
 - (void)chooseToolbarColor {
     [self presentComponentColorPickerForKey:@"ToolbarColor"
-                                       name:@"Toolbar"];
+                                       name:@"工具栏"];
 }
 
 - (void)chooseSearchBarColor {
     [self presentComponentColorPickerForKey:@"SearchBarColor"
-                                       name:@"SearchBar"];
+                                       name:@"搜索栏"];
 }
 
 
@@ -654,58 +654,58 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
 }
 
 - (void)chooseWindowSwitch {
-    [self presentComponentSwitchChoiceForKey:@"Window"
-                                        name:@"Window 全局 Tint"];
+    [self presentComponentSwitchChoiceForKey:@"应用整体强调色"
+                                        name:@"应用整体强调色"];
 }
 
 - (void)chooseSwitchSwitch {
-    [self presentComponentSwitchChoiceForKey:@"Switch"
-                                        name:@"UISwitch"];
+    [self presentComponentSwitchChoiceForKey:@"开关按钮"
+                                        name:@"开关按钮"];
 }
 
 - (void)chooseSliderSwitch {
-    [self presentComponentSwitchChoiceForKey:@"Slider"
-                                        name:@"UISlider"];
+    [self presentComponentSwitchChoiceForKey:@"滑动条 / 音量进度条"
+                                        name:@"滑动条 / 音量进度条"];
 }
 
 - (void)chooseProgressSwitch {
-    [self presentComponentSwitchChoiceForKey:@"Progress"
-                                        name:@"UIProgressView"];
+    [self presentComponentSwitchChoiceForKey:@"进度条"
+                                        name:@"进度条"];
 }
 
 - (void)chooseSegmentedSwitch {
     [self presentComponentSwitchChoiceForKey:@"Segmented"
-                                        name:@"UISegmentedControl"];
+                                        name:@"分段选择按钮"];
 }
 
 - (void)choosePageControlSwitch {
-    [self presentComponentSwitchChoiceForKey:@"PageControl"
-                                        name:@"UIPageControl"];
+    [self presentComponentSwitchChoiceForKey:@"页面圆点指示器"
+                                        name:@"页面圆点指示器"];
 }
 
 - (void)chooseRefreshControlSwitch {
-    [self presentComponentSwitchChoiceForKey:@"RefreshControl"
-                                        name:@"UIRefreshControl"];
+    [self presentComponentSwitchChoiceForKey:@"下拉刷新指示器"
+                                        name:@"下拉刷新指示器"];
 }
 
 - (void)chooseNavigationBarSwitch {
-    [self presentComponentSwitchChoiceForKey:@"NavigationBar"
-                                        name:@"UINavigationBar"];
+    [self presentComponentSwitchChoiceForKey:@"顶部导航栏"
+                                        name:@"顶部导航栏"];
 }
 
 - (void)chooseTabBarSwitch {
-    [self presentComponentSwitchChoiceForKey:@"TabBar"
-                                        name:@"UITabBar"];
+    [self presentComponentSwitchChoiceForKey:@"底部标签栏"
+                                        name:@"底部标签栏"];
 }
 
 - (void)chooseToolbarSwitch {
-    [self presentComponentSwitchChoiceForKey:@"Toolbar"
-                                        name:@"UIToolbar"];
+    [self presentComponentSwitchChoiceForKey:@"工具栏"
+                                        name:@"工具栏"];
 }
 
 - (void)chooseSearchBarSwitch {
-    [self presentComponentSwitchChoiceForKey:@"SearchBar"
-                                        name:@"UISearchBar"];
+    [self presentComponentSwitchChoiceForKey:@"搜索栏"
+                                        name:@"搜索栏"];
 }
 
 
@@ -938,7 +938,7 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
         [PSSpecifier groupSpecifierWithName:@"App 主色"];
 
     [accentGroup setProperty:
-        @"未设置时跟随全局主主题色。"
+        @"未单独设置时，使用全局主主题色。"
         forKey:@"footerText"];
 
     [items addObject:accentGroup];
@@ -961,74 +961,74 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
 
     PSSpecifier *colorGroup =
         [PSSpecifier
-         groupSpecifierWithName:@"App 独立组件颜色"];
+         groupSpecifierWithName:@"App 独立界面颜色"];
 
     [colorGroup setProperty:
-        @"需要主页面开启“启用组件独立颜色”。未设置的组件继续按全局组件颜色 → App 主色 → 全局主色回退。"
+        @"需要主页面开启“启用组件独立颜色”。没有单独设置的项目，会依次使用：全局对应颜色 → 此 App 主色 → 全局主色。"
         forKey:@"footerText"];
 
     [items addObject:colorGroup];
 
     [items addObject:
         [self componentColorButtonForKey:@"WindowColor"
-                                    name:@"Window"
+                                    name:@"应用整体强调色"
                                   action:@selector(chooseWindowColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"SwitchColor"
-                                    name:@"Switch"
+                                    name:@"开关按钮"
                                   action:@selector(chooseSwitchColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"SliderColor"
-                                    name:@"Slider"
+                                    name:@"滑动条 / 音量进度条"
                                   action:@selector(chooseSliderColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"ProgressColor"
-                                    name:@"Progress"
+                                    name:@"进度条"
                                   action:@selector(chooseProgressColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"SegmentedColor"
-                                    name:@"SegmentedControl"
+                                    name:@"分段选择按钮"
                                   action:@selector(chooseSegmentedColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"PageControlColor"
-                                    name:@"PageControl"
+                                    name:@"页面圆点指示器"
                                   action:@selector(choosePageControlColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"RefreshControlColor"
-                                    name:@"RefreshControl"
+                                    name:@"下拉刷新指示器"
                                   action:@selector(chooseRefreshControlColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"NavigationBarColor"
-                                    name:@"NavigationBar"
+                                    name:@"顶部导航栏"
                                   action:@selector(chooseNavigationBarColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"TabBarColor"
-                                    name:@"TabBar"
+                                    name:@"底部标签栏"
                                   action:@selector(chooseTabBarColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"ToolbarColor"
-                                    name:@"Toolbar"
+                                    name:@"工具栏"
                                   action:@selector(chooseToolbarColor)]];
 
     [items addObject:
         [self componentColorButtonForKey:@"SearchBarColor"
-                                    name:@"SearchBar"
+                                    name:@"搜索栏"
                                   action:@selector(chooseSearchBarColor)]];
 
 
     PSSpecifier *clearColors =
         [PSSpecifier
          preferenceSpecifierNamed:
-            @"清除此 App 全部组件颜色"
+            @"清除此 App 全部界面颜色"
                         target:self
                            set:nil
                            get:nil
@@ -1043,74 +1043,74 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
 
     PSSpecifier *switchGroup =
         [PSSpecifier
-         groupSpecifierWithName:@"App 独立组件开关"];
+         groupSpecifierWithName:@"App 独立界面开关"];
 
     [switchGroup setProperty:
-        @"每项可以设为强制开启、强制关闭或跟随全局。“标准控件总开关”和“Bar 总开关”仍然是组级总开关。"
+        @"每一项都可以设为“强制开启”“强制关闭”或“跟随全局”。主页面中的“标准控件总开关”和“导航栏/工具栏总开关”仍然是总开关。"
         forKey:@"footerText"];
 
     [items addObject:switchGroup];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"Window"
-                                     name:@"Window 全局 Tint"
+        [self componentSwitchButtonForKey:@"应用整体强调色"
+                                     name:@"应用整体强调色"
                                    action:@selector(chooseWindowSwitch)]];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"Switch"
-                                     name:@"UISwitch"
+        [self componentSwitchButtonForKey:@"开关按钮"
+                                     name:@"开关按钮"
                                    action:@selector(chooseSwitchSwitch)]];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"Slider"
-                                     name:@"UISlider"
+        [self componentSwitchButtonForKey:@"滑动条 / 音量进度条"
+                                     name:@"滑动条 / 音量进度条"
                                    action:@selector(chooseSliderSwitch)]];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"Progress"
-                                     name:@"UIProgressView"
+        [self componentSwitchButtonForKey:@"进度条"
+                                     name:@"进度条"
                                    action:@selector(chooseProgressSwitch)]];
 
     [items addObject:
         [self componentSwitchButtonForKey:@"Segmented"
-                                     name:@"UISegmentedControl"
+                                     name:@"分段选择按钮"
                                    action:@selector(chooseSegmentedSwitch)]];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"PageControl"
-                                     name:@"UIPageControl"
+        [self componentSwitchButtonForKey:@"页面圆点指示器"
+                                     name:@"页面圆点指示器"
                                    action:@selector(choosePageControlSwitch)]];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"RefreshControl"
-                                     name:@"UIRefreshControl"
+        [self componentSwitchButtonForKey:@"下拉刷新指示器"
+                                     name:@"下拉刷新指示器"
                                    action:@selector(chooseRefreshControlSwitch)]];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"NavigationBar"
-                                     name:@"UINavigationBar"
+        [self componentSwitchButtonForKey:@"顶部导航栏"
+                                     name:@"顶部导航栏"
                                    action:@selector(chooseNavigationBarSwitch)]];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"TabBar"
-                                     name:@"UITabBar"
+        [self componentSwitchButtonForKey:@"底部标签栏"
+                                     name:@"底部标签栏"
                                    action:@selector(chooseTabBarSwitch)]];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"Toolbar"
-                                     name:@"UIToolbar"
+        [self componentSwitchButtonForKey:@"工具栏"
+                                     name:@"工具栏"
                                    action:@selector(chooseToolbarSwitch)]];
 
     [items addObject:
-        [self componentSwitchButtonForKey:@"SearchBar"
-                                     name:@"UISearchBar"
+        [self componentSwitchButtonForKey:@"搜索栏"
+                                     name:@"搜索栏"
                                    action:@selector(chooseSearchBarSwitch)]];
 
 
     PSSpecifier *clearSwitches =
         [PSSpecifier
          preferenceSpecifierNamed:
-            @"清除此 App 全部组件开关"
+            @"清除此 App 全部界面开关"
                         target:self
                            set:nil
                            get:nil
