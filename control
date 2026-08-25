@@ -1,9 +1,0 @@
-Package: com.benja.globaltint
-Name: Global Tint
-Version: 0.4.1
-Architecture: iphoneos-arm64e
-Description: Emergency stable rollback of GlobalTint with SpringBoard injection explicitly disabled.
-Maintainer: Benja
-Author: Benja
-Section: Tweaks
-Depends: firmware (>= 17.0), mobilesubstrate (>= 0.9.5000), preferenceloader, ws.hbang.common (>= 2.0), com.opa334.libsandy
