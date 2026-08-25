@@ -246,16 +246,6 @@ static UIColor *GTReplacementPreservingAlpha(UIColor *source) {
                            alpha:(sourceAlpha * ra)];
 }
 
-static UIColor *GTMaybeReplaceResolvedBlue(UIColor *color) {
-    if (!GTShouldApplyBase() ||
-        !GTForceResolvedBlue ||
-        !GTLooksLikeResolvedSystemBlue(color)) {
-        return color;
-    }
-
-    return GTReplacementPreservingAlpha(color);
-}
-
 static void GTRunOnMain(dispatch_block_t block) {
     if (!block) {
         return;

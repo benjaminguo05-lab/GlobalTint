@@ -1,5 +1,11 @@
 # GlobalTint Changelog
 
+## 0.2.6
+
+- Fixed build failure caused by `-Werror,-Wunused-function`.
+- Removed the unused `GTMaybeReplaceResolvedBlue` helper.
+- No runtime behavior changes from V0.2.5.
+
 ## 0.2.5
 
 - Fixed V0.2.4 compile error: `GTShouldApplyBase` was referenced before declaration.

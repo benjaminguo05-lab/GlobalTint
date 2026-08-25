@@ -1,6 +1,6 @@
 Package: com.benja.globaltint
 Name: Global Tint
-Version: 0.2.5
+Version: 0.2.6
 Architecture: iphoneos-arm64e
 Description: Global UIKit tint customization with per-component colors, switches and app exclusions for RootHide/Relaxin.
 Maintainer: Benja
