@@ -306,3 +306,10 @@ is validated.
 Settings terminology cleanup. UIKit class names are replaced with user-friendly
 Chinese descriptions of the actual UI area being recolored. Runtime behavior
 and the V0.4.2 hard SpringBoard quarantine are unchanged.
+
+
+## V0.4.4
+
+The main Settings page and manual configuration dialogs are now localized with
+plain Chinese names that describe the actual UI area being changed. Technical
+preference keys and the V0.4.2 hard SpringBoard quarantine remain unchanged.

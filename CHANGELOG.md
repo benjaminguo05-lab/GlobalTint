@@ -1,5 +1,33 @@
 # GlobalTint Changelog
 
+## 0.4.4
+
+- Further localized the main Settings page and manual configuration dialogs.
+- Replaced developer-facing English UI labels with plain Chinese descriptions:
+  - GLOBAL TINT -> 全局设置
+  - Enable Global Tint -> 启用全局改色
+  - App -> 应用 (in user-facing section names/actions)
+  - System Blue -> 系统蓝色
+  - Link Color -> 链接颜色
+  - Window Tint -> 应用整体强调色
+  - Switch -> 开关按钮
+  - Slider -> 滑动条 / 音量进度条
+  - Progress -> 进度条
+  - SegmentedControl -> 分段选择按钮
+  - PageControl -> 页面圆点指示器
+  - RefreshControl -> 下拉刷新指示器
+  - NavigationBar -> 顶部导航栏
+  - TabBar -> 底部标签栏
+  - Toolbar -> 工具栏
+  - SearchBar -> 搜索栏
+  - Bar -> 导航栏与工具栏
+- `Bundle ID` is retained only where technically necessary and is displayed as
+  `应用标识（Bundle ID）`.
+- Simplified technical help text so normal users can understand what each
+  option changes without knowing UIKit class names.
+- No runtime code, preference keys, color precedence, loader/core split, or
+  SpringBoard quarantine behavior changed.
+
 ## 0.4.3
 
 - User-facing terminology cleanup only; no runtime tint logic changes.
