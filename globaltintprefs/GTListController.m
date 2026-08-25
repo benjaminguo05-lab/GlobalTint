@@ -243,9 +243,15 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                                   key:@"ForceResolvedBlue"
                          defaultValue:NO]];
 
+
+    [items addObject:
+        [self switchSpecifierWithName:@"UI 元素检查器"
+                                  key:@"ElementInspector"
+                         defaultValue:NO]];
+
     PSSpecifier *debugHelp = [PSSpecifier emptyGroupSpecifier];
     [debugHelp setProperty:
-        @"开启“注入测试边框”后，成功加载 GlobalTint 的 App 窗口四周会出现 3pt 主题色边框。测试完请关闭。“强制替换已解析蓝色”会拦截已经写入 UIView.tintColor / UILabel.textColor 的系统蓝，专门用于 App Store、Safari 等兼容场景。"
+        @"开启“注入测试边框”后，成功加载 GlobalTint 的 App 窗口四周会出现 3pt 主题色边框。测试完请关闭。“强制替换已解析蓝色”会拦截已经写入 UIView.tintColor / UILabel.textColor 的系统蓝，专门用于 App Store、Safari 等兼容场景。 开启“UI 元素检查器”后，在目标 App 内双指长按蓝色按钮或 Tab，可查看真实类名、父视图链、tint/text/layer 颜色；报告会自动复制到剪贴板。"
         forKey:@"footerText"];
     [items addObject:debugHelp];
 
