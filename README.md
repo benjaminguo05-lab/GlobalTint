@@ -252,3 +252,10 @@ V0.3.0 adds per-App accent profiles. A Bundle ID can be assigned its own accent
 color while all Apps without a profile continue to use the global accent.
 Explicit per-component colors still take priority when separate component
 colors are enabled.
+
+
+## V0.3.1
+
+V0.3.1 adds per-App component color rules. When separate component colors are
+enabled, a matching per-App component rule overrides the global component
+color, then falls back to the App accent and finally the global accent.

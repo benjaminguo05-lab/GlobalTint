@@ -65,6 +65,7 @@ static NSString *GTSearchBarHex = @"";
 
 static NSString *GTExcludedBundleIDs = @"";
 static NSDictionary<NSString *, NSString *> *GTAppColorOverrides = nil;
+static NSDictionary<NSString *, NSDictionary<NSString *, NSString *> *> *GTAppComponentColorOverrides = nil;
 
 static UIColor *GTAccentColor = nil;
 
@@ -183,14 +184,59 @@ static UIColor *GTCurrentAppAccentColor(void) {
     return overrideColor ?: globalAccent;
 }
 
-static UIColor *GTColorForComponentHex(NSString *componentHex) {
+static NSString *
+GTCurrentAppComponentOverrideHex(NSString *componentKey) {
+    if (!GTEnableAppColorOverrides ||
+        componentKey.length == 0 ||
+        GTAppComponentColorOverrides.count == 0) {
+        return nil;
+    }
+
+    NSString *bundleID = GTCurrentBundleIdentifier();
+
+    if (bundleID.length == 0) {
+        return nil;
+    }
+
+    NSDictionary<NSString *, NSString *> *appRules =
+        GTAppComponentColorOverrides[bundleID];
+
+    if (![appRules isKindOfClass:[NSDictionary class]]) {
+        return nil;
+    }
+
+    NSString *hex = appRules[componentKey];
+
+    if (![hex isKindOfClass:[NSString class]] ||
+        !GTColorFromHexOrNil(hex)) {
+        return nil;
+    }
+
+    return hex;
+}
+
+static UIColor *GTColorForComponent(NSString *componentKey,
+                                    NSString *componentHex) {
     UIColor *baseAccent = GTCurrentAppAccentColor();
 
     if (!GTUseSeparateColors) {
         return baseAccent;
     }
 
-    return GTColorFromHexOrNil(componentHex) ?: baseAccent;
+    NSString *appComponentHex =
+        GTCurrentAppComponentOverrideHex(componentKey);
+
+    UIColor *appComponentColor =
+        GTColorFromHexOrNil(appComponentHex);
+
+    if (appComponentColor) {
+        return appComponentColor;
+    }
+
+    UIColor *globalComponentColor =
+        GTColorFromHexOrNil(componentHex);
+
+    return globalComponentColor ?: baseAccent;
 }
 
 
@@ -1258,7 +1304,7 @@ static void GTApplyWindow(UIWindow *window) {
     }
 
     BOOL apply = GTShouldApplyBase() && GTEnableWindowTint;
-    GTApplyOrRestoreTint(window, apply, GTColorForComponentHex(GTWindowHex));
+    GTApplyOrRestoreTint(window, apply, GTColorForComponent(@"WindowColor", GTWindowHex));
     GTApplyDebugBorder(window);
     GTUpdateSceneInspectorForSourceWindow(window);
 }
@@ -1269,7 +1315,7 @@ static void GTApplySwitchControl(UISwitch *control) {
         GTApplyControls &&
         GTEnableSwitch;
 
-    UIColor *color = GTColorForComponentHex(GTSwitchHex);
+    UIColor *color = GTColorForComponent(@"SwitchColor", GTSwitchHex);
 
     if (apply && color) {
         GTRememberColorOnce(control,
@@ -1290,7 +1336,7 @@ static void GTApplySliderControl(UISlider *control) {
         GTApplyControls &&
         GTEnableSlider;
 
-    UIColor *color = GTColorForComponentHex(GTSliderHex);
+    UIColor *color = GTColorForComponent(@"SliderColor", GTSliderHex);
 
     GTApplyOrRestoreTint(control, apply, color);
 
@@ -1315,7 +1361,7 @@ static void GTApplyProgressControl(UIProgressView *control) {
         GTApplyControls &&
         GTEnableProgress;
 
-    UIColor *color = GTColorForComponentHex(GTProgressHex);
+    UIColor *color = GTColorForComponent(@"ProgressColor", GTProgressHex);
 
     if (apply && color) {
         GTRememberColorOnce(control,
@@ -1336,7 +1382,7 @@ static void GTApplySegmentedControl(UISegmentedControl *control) {
         GTApplyControls &&
         GTEnableSegmented;
 
-    UIColor *color = GTColorForComponentHex(GTSegmentedHex);
+    UIColor *color = GTColorForComponent(@"SegmentedColor", GTSegmentedHex);
 
     GTApplyOrRestoreTint(control, apply, color);
 
@@ -1361,7 +1407,7 @@ static void GTApplyPageControl(UIPageControl *control) {
         GTApplyControls &&
         GTEnablePageControl;
 
-    UIColor *color = GTColorForComponentHex(GTPageControlHex);
+    UIColor *color = GTColorForComponent(@"PageControlColor", GTPageControlHex);
 
     if (apply && color) {
         GTRememberColorOnce(control,
@@ -1384,7 +1430,7 @@ static void GTApplyRefreshControl(UIRefreshControl *control) {
 
     GTApplyOrRestoreTint(control,
                          apply,
-                         GTColorForComponentHex(GTRefreshControlHex));
+                         GTColorForComponent(@"RefreshControlColor", GTRefreshControlHex));
 }
 
 static void GTApplyNavigationBar(UINavigationBar *bar) {
@@ -1395,7 +1441,7 @@ static void GTApplyNavigationBar(UINavigationBar *bar) {
 
     GTApplyOrRestoreTint(bar,
                          apply,
-                         GTColorForComponentHex(GTNavigationBarHex));
+                         GTColorForComponent(@"NavigationBarColor", GTNavigationBarHex));
 }
 
 static NSDictionary *GTTitleAttributesWithColor(NSDictionary *attributes,
@@ -1604,7 +1650,7 @@ static void GTApplyTabBar(UITabBar *bar) {
         GTApplyBars &&
         GTEnableTabBar;
 
-    UIColor *color = GTColorForComponentHex(GTTabBarHex);
+    UIColor *color = GTColorForComponent(@"TabBarColor", GTTabBarHex);
 
     // Legacy/public tint path.
     GTApplyOrRestoreTint(bar, apply, color);
@@ -1670,7 +1716,7 @@ static void GTApplyToolbar(UIToolbar *bar) {
 
     GTApplyOrRestoreTint(bar,
                          apply,
-                         GTColorForComponentHex(GTToolbarHex));
+                         GTColorForComponent(@"ToolbarColor", GTToolbarHex));
 }
 
 static void GTApplySearchBar(UISearchBar *bar) {
@@ -1681,7 +1727,7 @@ static void GTApplySearchBar(UISearchBar *bar) {
 
     GTApplyOrRestoreTint(bar,
                          apply,
-                         GTColorForComponentHex(GTSearchBarHex));
+                         GTColorForComponent(@"SearchBarColor", GTSearchBarHex));
 }
 
 static void GTApplyResolvedBlueCompatibilityToView(UIView *view) {
@@ -2134,7 +2180,7 @@ static void GTRefreshKnownWindows(void) {
         return;
     }
 
-    UIColor *color = GTColorForComponentHex(GTToolbarHex);
+    UIColor *color = GTColorForComponent(@"ToolbarColor", GTToolbarHex);
     self.tintColor = color;
 
     SEL selector = NSSelectorFromString(@"setInteractionTintColor:");
@@ -2159,7 +2205,7 @@ static void GTRefreshKnownWindows(void) {
         return;
     }
 
-    UIColor *color = GTColorForComponentHex(GTToolbarHex);
+    UIColor *color = GTColorForComponent(@"ToolbarColor", GTToolbarHex);
     self.tintColor = color;
 
     SEL selector = NSSelectorFromString(@"setInteractionTintColor:");
@@ -2270,6 +2316,87 @@ GTNormalizedAppColorOverrides(NSDictionary *source) {
         }
 
         result[bundleID] = hex.uppercaseString;
+    }];
+
+    return [result copy];
+}
+
+static NSDictionary<NSString *,
+                            NSDictionary<NSString *, NSString *> *> *
+GTNormalizedAppComponentColorOverrides(NSDictionary *source) {
+    if (![source isKindOfClass:[NSDictionary class]] ||
+        source.count == 0) {
+        return @{};
+    }
+
+    NSSet<NSString *> *allowedKeys =
+        [NSSet setWithArray:@[
+            @"WindowColor",
+            @"SwitchColor",
+            @"SliderColor",
+            @"ProgressColor",
+            @"SegmentedColor",
+            @"PageControlColor",
+            @"RefreshControlColor",
+            @"NavigationBarColor",
+            @"TabBarColor",
+            @"ToolbarColor",
+            @"SearchBarColor"
+        ]];
+
+    NSMutableDictionary *result =
+        [NSMutableDictionary dictionary];
+
+    [source enumerateKeysAndObjectsUsingBlock:
+        ^(id rawBundleID, id rawRules, BOOL *stop) {
+
+        if (![rawBundleID isKindOfClass:[NSString class]] ||
+            ![rawRules isKindOfClass:[NSDictionary class]]) {
+            return;
+        }
+
+        NSString *bundleID =
+            [[(NSString *)rawBundleID
+              stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]]
+             lowercaseString];
+
+        if (bundleID.length == 0) {
+            return;
+        }
+
+        NSMutableDictionary<NSString *, NSString *> *rules =
+            [NSMutableDictionary dictionary];
+
+        [(NSDictionary *)rawRules enumerateKeysAndObjectsUsingBlock:
+            ^(id rawKey, id rawValue, BOOL *innerStop) {
+
+            if (![rawKey isKindOfClass:[NSString class]] ||
+                ![rawValue isKindOfClass:[NSString class]]) {
+                return;
+            }
+
+            NSString *componentKey = (NSString *)rawKey;
+
+            if (![allowedKeys containsObject:componentKey]) {
+                return;
+            }
+
+            NSString *hex =
+                [(NSString *)rawValue
+                 stringByTrimmingCharactersInSet:
+                    [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+            if (!GTColorFromHexOrNil(hex)) {
+                return;
+            }
+
+            rules[componentKey] = hex.uppercaseString;
+        }];
+
+        if (rules.count > 0) {
+            result[bundleID] = [rules copy];
+        }
     }];
 
     return [result copy];
@@ -2394,6 +2521,11 @@ static void GTLoadPreferencesFromDisk(void) {
             GTDictionaryPreference(@"AppColorOverrides")
         );
 
+    GTAppComponentColorOverrides =
+        GTNormalizedAppComponentColorOverrides(
+            GTDictionaryPreference(@"AppComponentColorOverrides")
+        );
+
     GTAccentColor =
         GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
 
@@ -2460,7 +2592,8 @@ static void GTRegisterPreferences(void) {
         @"ToolbarColor": @"",
         @"SearchBarColor": @"",
         @"ExcludedBundleIDs": @"",
-        @"AppColorOverrides": @{}
+        @"AppColorOverrides": @{},
+        @"AppComponentColorOverrides": @{}
     }];
 
     GTLoadPreferencesFromDisk();

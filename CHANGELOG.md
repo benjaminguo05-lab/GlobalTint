@@ -1,5 +1,32 @@
 # GlobalTint Changelog
 
+## 0.3.1
+
+- Added per-App component color overrides.
+- New `AppComponentColorOverrides` nested dictionary:
+  `bundleID -> componentKey -> #RRGGBB`.
+- Supported per-App component keys:
+  - Window
+  - Switch
+  - Slider
+  - Progress
+  - SegmentedControl
+  - PageControl
+  - RefreshControl
+  - NavigationBar
+  - TabBar
+  - Toolbar
+  - SearchBar
+- Color precedence when `UseSeparateColors` is enabled:
+  1. per-App component color
+  2. global component color
+  3. per-App accent color
+  4. global accent color
+- Added Settings UI to add/update, list/count, delete and clear per-App
+  component rules.
+- Existing V0.3.0 App accent profiles and V0.2.20 libSandy runtime path remain
+  unchanged.
+
 ## 0.3.0
 
 - Added per-App accent color profiles.
