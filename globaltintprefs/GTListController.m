@@ -193,7 +193,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     PSSpecifier *general =
         [PSSpecifier groupSpecifierWithName:@"GLOBAL TINT"];
     [general setProperty:
-        @"V0.3.1：支持按 App 设置独立主色和独立组件颜色；原有全局组件颜色、组件开关和 App 排除继续保留。"
+        @"V0.3.2：新增按 App 独立开启/关闭具体组件；App 主色、App 组件颜色、全局设置与排除规则继续保留。"
         forKey:@"footerText"];
     [items addObject:general];
 
@@ -316,6 +316,64 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     clearComponents.buttonAction =
         @selector(clearAppComponentColorOverrides);
     [items addObject:clearComponents];
+
+    PSSpecifier *appSwitchGroup =
+        [PSSpecifier groupSpecifierWithName:@"App 独立组件开关"];
+    [appSwitchGroup setProperty:
+        @"App 独立开关优先于单个全局组件开关；“标准控件总开关”和“Bar 总开关”仍作为组级总开关。选择“跟随全局”会删除该 App 的单项覆盖规则。"
+        forKey:@"footerText"];
+    [items addObject:appSwitchGroup];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"启用 App 独立组件开关"
+                                  key:@"EnableAppComponentSwitchOverrides"
+                         defaultValue:YES]];
+
+    PSSpecifier *switchSummary =
+        [PSSpecifier preferenceSpecifierNamed:@"已配置开关规则"
+                                       target:self
+                                          set:nil
+                                          get:@selector(appComponentSwitchOverrideSummary:)
+                                       detail:nil
+                                         cell:PSTitleValueCell
+                                         edit:nil];
+    [items addObject:switchSummary];
+
+    PSSpecifier *editSwitch =
+        [PSSpecifier preferenceSpecifierNamed:@"添加 / 修改 App 组件开关"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    editSwitch.buttonAction =
+        @selector(addOrEditAppComponentSwitchOverride);
+    [items addObject:editSwitch];
+
+    PSSpecifier *removeSwitch =
+        [PSSpecifier preferenceSpecifierNamed:@"删除 App 组件开关"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    removeSwitch.buttonAction =
+        @selector(removeAppComponentSwitchOverride);
+    [items addObject:removeSwitch];
+
+    PSSpecifier *clearSwitches =
+        [PSSpecifier preferenceSpecifierNamed:@"清空全部 App 组件开关"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    clearSwitches.buttonAction =
+        @selector(clearAppComponentSwitchOverrides);
+    [items addObject:clearSwitches];
 
 
     PSSpecifier *compatGroup =
@@ -596,7 +654,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     // Reset
     PSSpecifier *resetGroup = [PSSpecifier emptyGroupSpecifier];
     [resetGroup setProperty:
-        @"V0.3.1 新增 App 独立组件颜色。当前仍以 UIKit 公共控件为主；SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
+        @"V0.3.2 新增 App 独立组件开关。组级总开关仍拥有最高控制权；当前仍以 UIKit 公共控件为主，SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
         forKey:@"footerText"];
     [items addObject:resetGroup];
 
@@ -1545,6 +1603,442 @@ appComponentColorOverrides {
                      completion:nil];
 }
 
+#pragma mark - App component switch profiles
+
+- (NSDictionary<NSString *,
+                  NSDictionary<NSString *, NSNumber *> *> *)
+appComponentSwitchOverrides {
+    id value =
+        [[self preferences]
+         objectForKey:@"AppComponentSwitchOverrides"];
+
+    if (![value isKindOfClass:[NSDictionary class]]) {
+        return @{};
+    }
+
+    return [(NSDictionary *)value copy];
+}
+
+- (NSDictionary<NSString *, NSString *> *)appComponentSwitchNames {
+    return @{
+        @"Window": @"Window 全局 Tint",
+        @"Switch": @"UISwitch",
+        @"Slider": @"UISlider",
+        @"Progress": @"UIProgressView",
+        @"Segmented": @"UISegmentedControl",
+        @"PageControl": @"UIPageControl",
+        @"RefreshControl": @"UIRefreshControl",
+        @"NavigationBar": @"UINavigationBar",
+        @"TabBar": @"UITabBar",
+        @"Toolbar": @"UIToolbar",
+        @"SearchBar": @"UISearchBar"
+    };
+}
+
+- (NSArray<NSString *> *)orderedAppComponentSwitchKeys {
+    return @[
+        @"Window",
+        @"Switch",
+        @"Slider",
+        @"Progress",
+        @"Segmented",
+        @"PageControl",
+        @"RefreshControl",
+        @"NavigationBar",
+        @"TabBar",
+        @"Toolbar",
+        @"SearchBar"
+    ];
+}
+
+- (id)appComponentSwitchOverrideSummary:(PSSpecifier *)specifier {
+    NSDictionary *profiles =
+        [self appComponentSwitchOverrides];
+
+    NSInteger ruleCount = 0;
+
+    for (id value in profiles.allValues) {
+        if ([value isKindOfClass:[NSDictionary class]]) {
+            ruleCount += [(NSDictionary *)value count];
+        }
+    }
+
+    if (ruleCount == 0) {
+        return @"未设置";
+    }
+
+    return [NSString stringWithFormat:@"%ld 条",
+            (long)ruleCount];
+}
+
+- (void)setAppComponentSwitchOverrideForBundleID:(NSString *)bundleID
+                                    componentKey:(NSString *)componentKey
+                                           value:(NSNumber *)value {
+    NSString *normalized =
+        [[bundleID
+          stringByTrimmingCharactersInSet:
+            [NSCharacterSet whitespaceAndNewlineCharacterSet]]
+         lowercaseString];
+
+    if (normalized.length == 0 ||
+        componentKey.length == 0) {
+        return;
+    }
+
+    HBPreferences *preferences = [self preferences];
+
+    NSDictionary *stored =
+        [preferences objectForKey:@"AppComponentSwitchOverrides"];
+
+    NSMutableDictionary *allProfiles =
+        [stored isKindOfClass:[NSDictionary class]]
+        ? [stored mutableCopy]
+        : [NSMutableDictionary dictionary];
+
+    NSDictionary *existingRules =
+        [allProfiles[normalized]
+         isKindOfClass:[NSDictionary class]]
+        ? allProfiles[normalized]
+        : @{};
+
+    NSMutableDictionary *rules =
+        [existingRules mutableCopy];
+
+    if (value) {
+        rules[componentKey] = @([value boolValue]);
+    } else {
+        [rules removeObjectForKey:componentKey];
+    }
+
+    if (rules.count == 0) {
+        [allProfiles removeObjectForKey:normalized];
+    } else {
+        allProfiles[normalized] = [rules copy];
+    }
+
+    [preferences setObject:[allProfiles copy]
+                    forKey:@"AppComponentSwitchOverrides"];
+
+    [self postReloadNotification];
+    [self reloadSpecifiers];
+}
+
+- (void)chooseAppComponentSwitchValueForBundleID:(NSString *)bundleID
+                                     componentKey:(NSString *)componentKey {
+    NSDictionary *names =
+        [self appComponentSwitchNames];
+
+    NSString *componentName =
+        names[componentKey] ?: componentKey;
+
+    UIAlertController *sheet =
+        [UIAlertController alertControllerWithTitle:componentName
+                                            message:bundleID
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+
+    __weak typeof(self) weakSelf = self;
+
+    [sheet addAction:
+        [UIAlertAction actionWithTitle:@"强制开启"
+                                 style:UIAlertActionStyleDefault
+                               handler:^(__unused UIAlertAction *action) {
+        [weakSelf
+            setAppComponentSwitchOverrideForBundleID:bundleID
+                                        componentKey:componentKey
+                                               value:@YES];
+    }]];
+
+    [sheet addAction:
+        [UIAlertAction actionWithTitle:@"强制关闭"
+                                 style:UIAlertActionStyleDestructive
+                               handler:^(__unused UIAlertAction *action) {
+        [weakSelf
+            setAppComponentSwitchOverrideForBundleID:bundleID
+                                        componentKey:componentKey
+                                               value:@NO];
+    }]];
+
+    [sheet addAction:
+        [UIAlertAction actionWithTitle:@"跟随全局"
+                                 style:UIAlertActionStyleDefault
+                               handler:^(__unused UIAlertAction *action) {
+        [weakSelf
+            setAppComponentSwitchOverrideForBundleID:bundleID
+                                        componentKey:componentKey
+                                               value:nil];
+    }]];
+
+    [sheet addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    if (sheet.popoverPresentationController) {
+        sheet.popoverPresentationController.sourceView = self.view;
+        sheet.popoverPresentationController.sourceRect =
+            CGRectMake(
+                CGRectGetMidX(self.view.bounds),
+                CGRectGetMidY(self.view.bounds),
+                1.0,
+                1.0
+            );
+    }
+
+    [self presentViewController:sheet
+                       animated:YES
+                     completion:nil];
+}
+
+- (void)chooseAppComponentSwitchForBundleID:(NSString *)bundleID {
+    UIAlertController *sheet =
+        [UIAlertController alertControllerWithTitle:@"选择组件"
+                                            message:bundleID
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+
+    NSDictionary *names =
+        [self appComponentSwitchNames];
+
+    __weak typeof(self) weakSelf = self;
+
+    for (NSString *key in [self orderedAppComponentSwitchKeys]) {
+        NSString *title = names[key] ?: key;
+
+        [sheet addAction:
+            [UIAlertAction actionWithTitle:title
+                                     style:UIAlertActionStyleDefault
+                                   handler:^(__unused UIAlertAction *action) {
+            [weakSelf
+                chooseAppComponentSwitchValueForBundleID:bundleID
+                                             componentKey:key];
+        }]];
+    }
+
+    [sheet addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    if (sheet.popoverPresentationController) {
+        sheet.popoverPresentationController.sourceView = self.view;
+        sheet.popoverPresentationController.sourceRect =
+            CGRectMake(
+                CGRectGetMidX(self.view.bounds),
+                CGRectGetMidY(self.view.bounds),
+                1.0,
+                1.0
+            );
+    }
+
+    [self presentViewController:sheet
+                       animated:YES
+                     completion:nil];
+}
+
+- (void)addOrEditAppComponentSwitchOverride {
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"App 组件开关"
+                                            message:@"输入 Bundle ID，然后选择组件以及强制开启 / 强制关闭 / 跟随全局。"
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    [alert addTextFieldWithConfigurationHandler:
+        ^(UITextField *textField) {
+        textField.placeholder = @"例如 com.apple.AppStore";
+        textField.autocorrectionType =
+            UITextAutocorrectionTypeNo;
+        textField.autocapitalizationType =
+            UITextAutocapitalizationTypeNone;
+        textField.clearButtonMode =
+            UITextFieldViewModeWhileEditing;
+    }];
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    __weak typeof(self) weakSelf = self;
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"下一步"
+                                 style:UIAlertActionStyleDefault
+                               handler:^(__unused UIAlertAction *action) {
+
+        NSString *bundleID =
+            alert.textFields.firstObject.text ?: @"";
+
+        bundleID =
+            [bundleID stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+        if (bundleID.length == 0) {
+            return;
+        }
+
+        [weakSelf chooseAppComponentSwitchForBundleID:bundleID];
+    }]];
+
+    [self presentViewController:alert
+                       animated:YES
+                     completion:nil];
+}
+
+- (void)removeAppComponentSwitchOverride {
+    NSDictionary *profiles =
+        [self appComponentSwitchOverrides];
+
+    NSDictionary *names =
+        [self appComponentSwitchNames];
+
+    NSMutableArray<NSDictionary *> *entries =
+        [NSMutableArray array];
+
+    for (NSString *bundleID in profiles) {
+        id rawRules = profiles[bundleID];
+
+        if (![rawRules isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+
+        NSDictionary *rules = rawRules;
+
+        for (NSString *componentKey in rules) {
+            id rawValue = rules[componentKey];
+
+            if (![rawValue respondsToSelector:@selector(boolValue)]) {
+                continue;
+            }
+
+            [entries addObject:@{
+                @"bundleID": bundleID,
+                @"componentKey": componentKey,
+                @"componentName": names[componentKey] ?: componentKey,
+                @"enabled": @([rawValue boolValue])
+            }];
+        }
+    }
+
+    if (entries.count == 0) {
+        UIAlertController *empty =
+            [UIAlertController alertControllerWithTitle:@"没有开关规则"
+                                                message:@"当前没有可删除的 App 独立组件开关。"
+                                         preferredStyle:UIAlertControllerStyleAlert];
+
+        [empty addAction:
+            [UIAlertAction actionWithTitle:@"好"
+                                     style:UIAlertActionStyleDefault
+                                   handler:nil]];
+
+        [self presentViewController:empty
+                           animated:YES
+                         completion:nil];
+        return;
+    }
+
+    [entries sortUsingComparator:
+        ^NSComparisonResult(NSDictionary *left,
+                            NSDictionary *right) {
+        NSString *a =
+            [NSString stringWithFormat:@"%@ %@",
+             left[@"bundleID"],
+             left[@"componentName"]];
+
+        NSString *b =
+            [NSString stringWithFormat:@"%@ %@",
+             right[@"bundleID"],
+             right[@"componentName"]];
+
+        return [a localizedCaseInsensitiveCompare:b];
+    }];
+
+    UIAlertController *sheet =
+        [UIAlertController alertControllerWithTitle:@"删除 App 组件开关"
+                                            message:nil
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+
+    __weak typeof(self) weakSelf = self;
+
+    for (NSDictionary *entry in entries) {
+        NSString *bundleID = entry[@"bundleID"];
+        NSString *componentKey = entry[@"componentKey"];
+        BOOL enabled = [entry[@"enabled"] boolValue];
+
+        NSString *title =
+            [NSString stringWithFormat:@"%@ · %@ · %@",
+             bundleID,
+             entry[@"componentName"],
+             enabled ? @"开" : @"关"];
+
+        [sheet addAction:
+            [UIAlertAction actionWithTitle:title
+                                     style:UIAlertActionStyleDestructive
+                                   handler:^(__unused UIAlertAction *action) {
+            [weakSelf
+                setAppComponentSwitchOverrideForBundleID:bundleID
+                                            componentKey:componentKey
+                                                   value:nil];
+        }]];
+    }
+
+    [sheet addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    if (sheet.popoverPresentationController) {
+        sheet.popoverPresentationController.sourceView = self.view;
+        sheet.popoverPresentationController.sourceRect =
+            CGRectMake(
+                CGRectGetMidX(self.view.bounds),
+                CGRectGetMidY(self.view.bounds),
+                1.0,
+                1.0
+            );
+    }
+
+    [self presentViewController:sheet
+                       animated:YES
+                     completion:nil];
+}
+
+- (void)clearAppComponentSwitchOverrides {
+    NSDictionary *profiles =
+        [self appComponentSwitchOverrides];
+
+    if (profiles.count == 0) {
+        return;
+    }
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"清空 App 组件开关"
+                                            message:@"删除全部 App 独立组件开关配置？"
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    __weak typeof(self) weakSelf = self;
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"清空"
+                                 style:UIAlertActionStyleDestructive
+                               handler:^(__unused UIAlertAction *action) {
+        HBPreferences *preferences =
+            [weakSelf preferences];
+
+        [preferences
+            removeObjectForKey:@"AppComponentSwitchOverrides"];
+
+        [weakSelf postReloadNotification];
+        [weakSelf reloadSpecifiers];
+    }]];
+
+    [self presentViewController:alert
+                       animated:YES
+                     completion:nil];
+}
+
 #pragma mark - App exclusions
 
 - (id)excludedBundleSummary:(PSSpecifier *)specifier {
@@ -1640,7 +2134,7 @@ appComponentColorOverrides {
 - (void)resetPreferences {
     UIAlertController *alert =
         [UIAlertController alertControllerWithTitle:@"恢复默认设置"
-                                            message:@"将主色、App 独立主色、App 独立组件颜色、全局组件颜色、组件开关以及 App 排除列表全部恢复为默认值。"
+                                            message:@"将主色、App 独立主色、App 独立组件颜色、App 独立组件开关、全局组件颜色、组件开关以及 App 排除列表全部恢复为默认值。"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addAction:
