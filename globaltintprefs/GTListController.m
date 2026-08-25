@@ -194,7 +194,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     PSSpecifier *general =
         [PSSpecifier groupSpecifierWithName:@"GLOBAL TINT"];
     [general setProperty:
-        @"V0.3.3：新增 App 配置管理器，可直接从已安装 App 列表进入每个 App 的主色、组件颜色、组件开关和排除配置。"
+        @"V0.3.4：App 配置管理器新增真实图标、搜索、配置状态和已配置优先排序；每个 App 的详细配置逻辑保持不变。"
         forKey:@"footerText"];
     [items addObject:general];
 
@@ -214,7 +214,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
         [PSSpecifier groupSpecifierWithName:@"App 配置管理"];
 
     [managerGroup setProperty:
-        @"推荐使用这里直接选择已安装 App。下面保留的 Bundle ID 手动配置作为高级/备用入口。"
+        @"推荐使用这里直接选择已安装 App。V0.3.4 支持 App 图标、名称/Bundle ID 搜索、配置状态和已配置优先排序；下面仍保留手动 Bundle ID 作为备用入口。"
         forKey:@"footerText"];
 
     [items addObject:managerGroup];
@@ -675,7 +675,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     // Reset
     PSSpecifier *resetGroup = [PSSpecifier emptyGroupSpecifier];
     [resetGroup setProperty:
-        @"V0.3.3 新增 App 配置管理器。原有手动 Bundle ID 配置仍保留为高级入口；当前仍以 UIKit 公共控件为主，SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
+        @"V0.3.4 完善 App 配置管理器的图标、搜索与状态展示。当前仍以 UIKit 公共控件为主，SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
         forKey:@"footerText"];
     [items addObject:resetGroup];
 

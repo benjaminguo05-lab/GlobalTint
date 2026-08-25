@@ -1,4 +1,6 @@
 #import <Preferences/PSListController.h>
+#import <UIKit/UIKit.h>
 
-@interface GTAppListController : PSListController
+@interface GTAppListController :
+    PSListController <UISearchResultsUpdating>
 @end

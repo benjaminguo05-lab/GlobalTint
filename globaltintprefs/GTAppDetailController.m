@@ -1,9 +1,11 @@
 #import "GTAppDetailController.h"
+#import "GTAppIcon.h"
 
 #import <Cephei/HBPreferences.h>
 #import <CoreFoundation/CoreFoundation.h>
 #import <Preferences/PSSpecifier.h>
 #import <UIKit/UIKit.h>
+#import <objc/message.h>
 
 static NSString * const GTPrefsIdentifier =
     @"com.benja.globaltint";
@@ -899,6 +901,27 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
 
     [items addObject:appGroup];
 
+    PSSpecifier *appHeader =
+        [PSSpecifier
+         preferenceSpecifierNamed:
+            (self.gtAppName.length > 0
+             ? self.gtAppName
+             : self.gtBundleID)
+                        target:nil
+                           set:nil
+                           get:nil
+                        detail:nil
+                          cell:PSTitleValueCell
+                          edit:nil];
+
+    [appHeader setProperty:@YES
+                    forKey:@"GTAppHeader"];
+
+    [appHeader setProperty:self.gtBundleID ?: @""
+                    forKey:@"GTBundleID"];
+
+    [items addObject:appHeader];
+
     PSSpecifier *excluded =
         [PSSpecifier
          preferenceSpecifierNamed:@"排除此 App"
@@ -1131,7 +1154,69 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
             [self buildSpecifiers];
     }
 
-    return _specifiers;
+ 
+#pragma mark - App header cell
+
+- (PSSpecifier *)gtSpecifierAtIndexPath:
+    (NSIndexPath *)indexPath {
+
+    SEL selector =
+        NSSelectorFromString(@"specifierAtIndexPath:");
+
+    if (![self respondsToSelector:selector]) {
+        return nil;
+    }
+
+    return ((id (*)(id, SEL, id))objc_msgSend)(
+        self,
+        selector,
+        indexPath
+    );
+}
+
+- (UITableViewCell *)tableView:
+    (UITableView *)tableView
+             cellForRowAtIndexPath:
+    (NSIndexPath *)indexPath {
+
+    UITableViewCell *cell =
+        [super tableView:tableView
+   cellForRowAtIndexPath:indexPath];
+
+    PSSpecifier *specifier =
+        [self gtSpecifierAtIndexPath:indexPath];
+
+    if (![[specifier propertyForKey:@"GTAppHeader"]
+          boolValue]) {
+        return cell;
+    }
+
+    NSString *bundleID =
+        [specifier propertyForKey:@"GTBundleID"];
+
+    if (![bundleID isKindOfClass:[NSString class]] ||
+        bundleID.length == 0) {
+        return cell;
+    }
+
+    cell.imageView.image =
+        GTApplicationIconForBundleIdentifier(
+            bundleID
+        );
+
+    cell.imageView.layer.cornerRadius = 10.0;
+    cell.imageView.layer.masksToBounds = YES;
+
+    cell.selectionStyle =
+        UITableViewCellSelectionStyleNone;
+
+    cell.accessoryType =
+        UITableViewCellAccessoryNone;
+
+    return cell;
+}
+
+   return _specifiers;
 }
 
 @end
