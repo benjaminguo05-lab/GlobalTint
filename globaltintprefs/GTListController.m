@@ -194,7 +194,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     PSSpecifier *general =
         [PSSpecifier groupSpecifierWithName:@"GLOBAL TINT"];
     [general setProperty:
-        @"V0.3.4：App 配置管理器新增真实图标、搜索、配置状态和已配置优先排序；每个 App 的详细配置逻辑保持不变。"
+        @"V0.4.0：新增 SpringBoard / System UI 基础支持，可分别控制 Control Center、Lock Screen 与系统菜单，并允许 GT 检查器直接检查 SpringBoard 私有界面。"
         forKey:@"footerText"];
     [items addObject:general];
 
@@ -397,6 +397,64 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:clearSwitches];
 
 
+    PSSpecifier *systemUIGroup =
+        [PSSpecifier groupSpecifierWithName:@"System UI / SpringBoard"];
+
+    [systemUIGroup setProperty:
+        @"V0.4.0 先建立安全的 System UI 基础层：只对明确识别为 Control Center、Lock Screen 或系统菜单的 SpringBoard 视图应用 UIKit tint。系统界面总开关默认关闭。开启 UI 元素检查器后，也可以直接检查 SpringBoard 中的真实私有类。"
+        forKey:@"footerText"];
+
+    [items addObject:systemUIGroup];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"启用 System UI 改色"
+                                  key:@"EnableSystemUI"
+                         defaultValue:NO]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"Control Center"
+                                  key:@"EnableControlCenter"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"Lock Screen"
+                                  key:@"EnableLockScreen"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self switchSpecifierWithName:@"系统菜单 / Context Menu"
+                                  key:@"EnableSystemMenus"
+                         defaultValue:YES]];
+
+    [items addObject:
+        [self colorButtonWithName:@"System UI 主色"
+                              key:@"SystemAccentColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseSystemAccentColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"Control Center 色"
+                              key:@"ControlCenterColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseControlCenterColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"Lock Screen 色"
+                              key:@"LockScreenColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseLockScreenColor)]];
+
+    [items addObject:
+        [self colorButtonWithName:@"System Menu 色"
+                              key:@"SystemMenuColor"
+                     defaultValue:@""
+                    allowInherit:YES
+                           action:@selector(chooseSystemMenuColor)]];
+
+
     PSSpecifier *compatGroup =
         [PSSpecifier groupSpecifierWithName:@"兼容模式"];
     [compatGroup setProperty:
@@ -440,7 +498,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
     PSSpecifier *debugHelp = [PSSpecifier emptyGroupSpecifier];
     [debugHelp setProperty:
-        @"“注入测试边框”仅用于确认当前进程中的 GlobalTint 窗口处理是否运行，测试后建议关闭。“强制替换已解析蓝色”用于少数仍直接写入系统蓝色的 UIKit 元素。开启“UI 元素检查器”后，目标 App 右上角会显示紫色 GT；点 GT，再点需要检查的 UI，即可生成视图层级与颜色报告并自动复制到剪贴板。检查器采用独立透明 UIWindowScene 覆盖层，不再使用长按或 sendEvent 事件 Hook。"
+        @"“注入测试边框”仅用于确认当前进程中的 GlobalTint 窗口处理是否运行，测试后建议关闭。“强制替换已解析蓝色”用于少数仍直接写入系统蓝色的 UIKit 元素。开启“UI 元素检查器”后，普通 App 和 SpringBoard 都可以显示紫色 GT；点 GT，再点需要检查的 UI，即可生成视图层级与颜色报告并自动复制到剪贴板。检查器采用独立透明 UIWindowScene 覆盖层，不再使用长按或 sendEvent 事件 Hook。"
         forKey:@"footerText"];
     [items addObject:debugHelp];
 
@@ -675,7 +733,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     // Reset
     PSSpecifier *resetGroup = [PSSpecifier emptyGroupSpecifier];
     [resetGroup setProperty:
-        @"V0.3.4 完善 App 配置管理器的图标、搜索与状态展示。当前仍以 UIKit 公共控件为主，SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
+        @"V0.4.0 建立 SpringBoard / System UI 基础层，并开放 SpringBoard GT 检查器。Control Center、Lock Screen 与系统菜单目前使用保守的 UIKit tint 分类；下一步根据实际 GT 报告继续做精确私有类适配。"
         forKey:@"footerText"];
     [items addObject:resetGroup];
 
@@ -819,6 +877,30 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [self presentColorPickerForKey:@"SearchBarColor"
                       defaultValue:@""
                              title:@"SearchBar"];
+}
+
+- (void)chooseSystemAccentColor {
+    [self presentColorPickerForKey:@"SystemAccentColor"
+                      defaultValue:@""
+                             title:@"System UI 主色"];
+}
+
+- (void)chooseControlCenterColor {
+    [self presentColorPickerForKey:@"ControlCenterColor"
+                      defaultValue:@""
+                             title:@"Control Center"];
+}
+
+- (void)chooseLockScreenColor {
+    [self presentColorPickerForKey:@"LockScreenColor"
+                      defaultValue:@""
+                             title:@"Lock Screen"];
+}
+
+- (void)chooseSystemMenuColor {
+    [self presentColorPickerForKey:@"SystemMenuColor"
+                      defaultValue:@""
+                             title:@"System Menu"];
 }
 
 - (void)colorPickerViewControllerDidSelectColor:
