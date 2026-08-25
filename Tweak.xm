@@ -85,7 +85,9 @@ static char GTOriginalWindowBorderWidthKey;
 static char GTOriginalWindowBorderColorKey;
 static char GTOriginalResolvedTintKey;
 static char GTOriginalResolvedTextColorKey;
-static char GTInspectorGestureKey;
+static char GTInspectorTrackedTouchKey;
+static char GTInspectorStartPointKey;
+static char GTInspectorTokenKey;
 
 static BOOL GTShouldApplyBase(void);
 
@@ -587,76 +589,203 @@ static void GTInspectorPresent(UIWindow *window, UIView *hitView) {
                           completion:nil];
 }
 
-@interface UIApplication (GlobalTintInspector)
-- (void)gt_handleGlobalTintInspector:
-    (UILongPressGestureRecognizer *)gesture;
-@end
+static NSUInteger GTInspectorSequence = 0;
 
-@implementation UIApplication (GlobalTintInspector)
-
-- (void)gt_handleGlobalTintInspector:
-    (UILongPressGestureRecognizer *)gesture {
-
-    if (gesture.state != UIGestureRecognizerStateBegan) {
-        return;
-    }
-
-    UIWindow *window = (UIWindow *)gesture.view;
-
-    if (![window isKindOfClass:[UIWindow class]]) {
-        return;
-    }
-
-    CGPoint point = [gesture locationInView:window];
-    UIView *hitView = [window hitTest:point withEvent:nil];
-
-    GTInspectorPresent(window, hitView);
-}
-
-@end
-
-static void GTUpdateInspectorGesture(UIWindow *window) {
+static void GTCancelInspectorTouch(UIWindow *window, UITouch *touch) {
     if (!window) {
         return;
     }
 
-    UILongPressGestureRecognizer *gesture =
-        objc_getAssociatedObject(window, &GTInspectorGestureKey);
+    UITouch *tracked =
+        objc_getAssociatedObject(window, &GTInspectorTrackedTouchKey);
 
-    BOOL shouldEnable =
-        GTShouldApplyBase() &&
-        GTElementInspector;
-
-    if (shouldEnable && !gesture) {
-        gesture =
-            [[UILongPressGestureRecognizer alloc]
-             initWithTarget:UIApplication.sharedApplication
-             action:@selector(gt_handleGlobalTintInspector:)];
-
-        gesture.minimumPressDuration = 0.8;
-        gesture.numberOfTouchesRequired = 1;
-        gesture.cancelsTouchesInView = NO;
-        gesture.delaysTouchesBegan = NO;
-
-        [window addGestureRecognizer:gesture];
-
+    if (!touch || tracked == touch) {
         objc_setAssociatedObject(
             window,
-            &GTInspectorGestureKey,
-            gesture,
+            &GTInspectorTrackedTouchKey,
+            nil,
             OBJC_ASSOCIATION_RETAIN_NONATOMIC
         );
-    } else if (!shouldEnable && gesture) {
-        [window removeGestureRecognizer:gesture];
 
         objc_setAssociatedObject(
             window,
-            &GTInspectorGestureKey,
+            &GTInspectorStartPointKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+
+        objc_setAssociatedObject(
+            window,
+            &GTInspectorTokenKey,
             nil,
             OBJC_ASSOCIATION_RETAIN_NONATOMIC
         );
     }
 }
+
+static void GTBeginInspectorTouch(UIWindow *window, UITouch *touch) {
+    if (!window || !touch) {
+        return;
+    }
+
+    CGPoint startPoint = [touch locationInView:window];
+    NSNumber *token = @(++GTInspectorSequence);
+
+    objc_setAssociatedObject(
+        window,
+        &GTInspectorTrackedTouchKey,
+        touch,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+
+    objc_setAssociatedObject(
+        window,
+        &GTInspectorStartPointKey,
+        [NSValue valueWithCGPoint:startPoint],
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+
+    objc_setAssociatedObject(
+        window,
+        &GTInspectorTokenKey,
+        token,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+
+    dispatch_after(
+        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
+        dispatch_get_main_queue(),
+        ^{
+            if (!GTElementInspector || !GTShouldApplyBase()) {
+                return;
+            }
+
+            NSNumber *currentToken =
+                objc_getAssociatedObject(window, &GTInspectorTokenKey);
+
+            UITouch *tracked =
+                objc_getAssociatedObject(window, &GTInspectorTrackedTouchKey);
+
+            NSValue *startValue =
+                objc_getAssociatedObject(window, &GTInspectorStartPointKey);
+
+            if (![currentToken isEqual:token] ||
+                tracked != touch ||
+                !startValue) {
+                return;
+            }
+
+            if (touch.phase == UITouchPhaseEnded ||
+                touch.phase == UITouchPhaseCancelled) {
+                GTCancelInspectorTouch(window, touch);
+                return;
+            }
+
+            CGPoint originalPoint = startValue.CGPointValue;
+            CGPoint currentPoint = [touch locationInView:window];
+
+            CGFloat dx = currentPoint.x - originalPoint.x;
+            CGFloat dy = currentPoint.y - originalPoint.y;
+            CGFloat distanceSquared = dx * dx + dy * dy;
+
+            // Cancel if the finger moved more than ~18 points.
+            if (distanceSquared > (18.0 * 18.0)) {
+                GTCancelInspectorTouch(window, touch);
+                return;
+            }
+
+            // Clear tracking before presenting the alert so the current
+            // touch cannot trigger the inspector twice.
+            GTCancelInspectorTouch(window, touch);
+
+            UIView *hitView =
+                [window hitTest:currentPoint withEvent:nil];
+
+            GTInspectorPresent(window, hitView);
+        }
+    );
+}
+
+static void GTProcessInspectorEvent(UIEvent *event) {
+    if (!GTElementInspector ||
+        !GTShouldApplyBase() ||
+        event.type != UIEventTypeTouches) {
+        return;
+    }
+
+    NSSet<UITouch *> *touches = event.allTouches;
+
+    if (touches.count == 0) {
+        return;
+    }
+
+    for (UITouch *touch in touches) {
+        UIWindow *window = touch.window;
+
+        if (!window) {
+            continue;
+        }
+
+        switch (touch.phase) {
+            case UITouchPhaseBegan: {
+                // Inspector is intentionally single-finger only.
+                if (touches.count == 1) {
+                    GTBeginInspectorTouch(window, touch);
+                } else {
+                    GTCancelInspectorTouch(window, nil);
+                }
+                break;
+            }
+
+            case UITouchPhaseMoved: {
+                UITouch *tracked =
+                    objc_getAssociatedObject(
+                        window,
+                        &GTInspectorTrackedTouchKey
+                    );
+
+                NSValue *startValue =
+                    objc_getAssociatedObject(
+                        window,
+                        &GTInspectorStartPointKey
+                    );
+
+                if (tracked == touch && startValue) {
+                    CGPoint originalPoint = startValue.CGPointValue;
+                    CGPoint currentPoint = [touch locationInView:window];
+
+                    CGFloat dx = currentPoint.x - originalPoint.x;
+                    CGFloat dy = currentPoint.y - originalPoint.y;
+
+                    if ((dx * dx + dy * dy) > (18.0 * 18.0)) {
+                        GTCancelInspectorTouch(window, touch);
+                    }
+                }
+
+                break;
+            }
+
+            case UITouchPhaseEnded:
+            case UITouchPhaseCancelled:
+                GTCancelInspectorTouch(window, touch);
+                break;
+
+            default:
+                break;
+        }
+    }
+}
+
+#pragma mark - Raw touch inspector
+
+%hook UIApplication
+
+- (void)sendEvent:(UIEvent *)event {
+    GTProcessInspectorEvent(event);
+    %orig(event);
+}
+
+%end
 
 static void GTApplyDebugBorder(UIWindow *window) {
     if (!window) {
@@ -732,7 +861,6 @@ static void GTApplyWindow(UIWindow *window) {
     BOOL apply = GTShouldApplyBase() && GTEnableWindowTint;
     GTApplyOrRestoreTint(window, apply, GTColorForComponentHex(GTWindowHex));
     GTApplyDebugBorder(window);
-    GTUpdateInspectorGesture(window);
 }
 
 static void GTApplySwitchControl(UISwitch *control) {

@@ -1,5 +1,15 @@
 # GlobalTint Changelog
 
+## 0.2.9
+
+- Reworked the UI inspector because Window-level `UILongPressGestureRecognizer`
+  did not fire reliably in App Store and Safari.
+- Inspector now hooks `UIApplication -sendEvent:` and tracks raw `UITouch`
+  events directly.
+- Activation remains a single-finger hold for 0.8 seconds.
+- Moving more than approximately 18 pt cancels inspection.
+- The inspector does not consume or cancel the original touch event.
+
 ## 0.2.8
 
 - Changed the UI inspector activation gesture from two-finger long press to one-finger long press.
