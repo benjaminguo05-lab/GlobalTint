@@ -1,5 +1,15 @@
 # GlobalTint Changelog
 
+## 0.2.12
+
+- Fixed UI Inspector not firing in App Store / Safari after SpringBoard filtering.
+- Replaced the Logos hook on base `UIApplication` with a runtime hook on the
+  exact UIApplication class used by the current process.
+- Handles private UIApplication subclasses that override `sendEvent:`.
+- If `sendEvent:` is inherited, adds an override only to the exact runtime class
+  instead of modifying UIApplication globally.
+- Inspector behavior remains: single-finger hold for ~0.8 seconds.
+
 ## 0.2.11
 
 - Fixed V0.2.10 compile error where `GTInspectorViewIsEligible` was referenced before declaration.

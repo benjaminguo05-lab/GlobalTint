@@ -832,17 +832,6 @@ static void GTProcessInspectorEvent(UIEvent *event) {
     }
 }
 
-#pragma mark - Raw touch inspector
-
-%hook UIApplication
-
-- (void)sendEvent:(UIEvent *)event {
-    GTProcessInspectorEvent(event);
-    %orig(event);
-}
-
-%end
-
 static void GTApplyDebugBorder(UIWindow *window) {
     if (!window) {
         return;
@@ -1827,6 +1816,68 @@ static void GTRefreshKnownWindows(void) {
 
 %end
 
+#pragma mark - Exact UIApplication subclass event hook
+
+static IMP GTOriginalSendEventIMP = NULL;
+static Class GTHookedApplicationClass = Nil;
+
+static void GTInspectorSendEventReplacement(id self, SEL _cmd, UIEvent *event) {
+    GTProcessInspectorEvent(event);
+
+    if (GTOriginalSendEventIMP) {
+        ((void (*)(id, SEL, UIEvent *))GTOriginalSendEventIMP)(
+            self,
+            _cmd,
+            event
+        );
+    }
+}
+
+static void GTInstallExactApplicationEventHook(void) {
+    UIApplication *application = UIApplication.sharedApplication;
+
+    if (!application) {
+        return;
+    }
+
+    Class actualClass = object_getClass(application);
+
+    if (!actualClass ||
+        actualClass == GTHookedApplicationClass) {
+        return;
+    }
+
+    SEL selector = @selector(sendEvent:);
+
+    // class_getInstanceMethod walks the superclass chain, so this also works
+    // when the private UIApplication subclass merely inherits sendEvent:.
+    Method method = class_getInstanceMethod(actualClass, selector);
+
+    if (!method) {
+        return;
+    }
+
+    const char *types = method_getTypeEncoding(method);
+    IMP replacement = (IMP)GTInspectorSendEventReplacement;
+
+    // If sendEvent: is inherited, first add an override to the exact runtime
+    // UIApplication subclass. This avoids changing UIApplication globally.
+    if (class_addMethod(actualClass, selector, replacement, types)) {
+        GTOriginalSendEventIMP = method_getImplementation(method);
+    } else {
+        Method ownMethod = class_getInstanceMethod(actualClass, selector);
+
+        if (!ownMethod) {
+            return;
+        }
+
+        GTOriginalSendEventIMP =
+            method_setImplementation(ownMethod, replacement);
+    }
+
+    GTHookedApplicationClass = actualClass;
+}
+
 #pragma mark - Preferences
 
 static void GTRegisterPreferences(void) {
@@ -1998,5 +2049,11 @@ static void GTRegisterPreferences(void) {
 
         // A custom Logos constructor is used, so initialize hooks explicitly.
         %init;
+
+        // App Store / Safari may use private UIApplication subclasses that
+        // override sendEvent:. Hook the exact runtime class on the main queue.
+        dispatch_async(dispatch_get_main_queue(), ^{
+            GTInstallExactApplicationEventHook();
+        });
     }
 }
