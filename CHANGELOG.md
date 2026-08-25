@@ -1,5 +1,18 @@
 # GlobalTint Changelog
 
+## 0.2.13
+
+- Replaced the unreliable long-press/raw-touch inspector workflow with a
+  deterministic floating inspector button.
+- When `UI 元素检查器` is enabled, eligible app windows show a purple `GT`
+  floating button.
+- Tap `GT`, then tap the target UI element.
+- The transparent capture overlay removes itself before calling `hitTest`, so
+  the report describes the original underlying app view.
+- Inspector still copies the full report to the clipboard automatically.
+- Existing raw-touch hook remains only as a fallback; the floating button is
+  now the recommended inspection workflow.
+
 ## 0.2.12
 
 - Fixed UI Inspector not firing in App Store / Safari after SpringBoard filtering.

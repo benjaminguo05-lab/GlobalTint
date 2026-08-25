@@ -88,6 +88,8 @@ static char GTOriginalResolvedTextColorKey;
 static char GTInspectorTrackedTouchKey;
 static char GTInspectorStartPointKey;
 static char GTInspectorTokenKey;
+static char GTInspectorButtonKey;
+static char GTInspectorOverlayKey;
 
 static BOOL GTShouldApplyBase(void);
 static BOOL GTInspectorProcessIsEligible(void);
@@ -832,6 +834,241 @@ static void GTProcessInspectorEvent(UIEvent *event) {
     }
 }
 
+static BOOL GTInspectorCanAttachToWindow(UIWindow *window) {
+    if (!window ||
+        !GTInspectorProcessIsEligible() ||
+        !GTInspectorWindowIsEligible(window)) {
+        return NO;
+    }
+
+    // Only attach the floating inspector to normal app content windows.
+    if (window.windowLevel > UIWindowLevelNormal + 0.5) {
+        return NO;
+    }
+
+    if (window.bounds.size.width < 200.0 ||
+        window.bounds.size.height < 300.0) {
+        return NO;
+    }
+
+    return YES;
+}
+
+static void GTRemoveInspectorOverlay(UIWindow *window) {
+    if (!window) {
+        return;
+    }
+
+    UIView *overlay =
+        objc_getAssociatedObject(window, &GTInspectorOverlayKey);
+
+    if (overlay) {
+        [overlay removeFromSuperview];
+
+        objc_setAssociatedObject(
+            window,
+            &GTInspectorOverlayKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    }
+}
+
+@interface UIApplication (GlobalTintFloatingInspector)
+- (void)gt_floatingInspectorButtonTapped:(UIButton *)sender;
+- (void)gt_floatingInspectorOverlayTapped:(UITapGestureRecognizer *)gesture;
+@end
+
+@implementation UIApplication (GlobalTintFloatingInspector)
+
+- (void)gt_floatingInspectorButtonTapped:(UIButton *)sender {
+    UIWindow *window = sender.window;
+
+    if (!GTInspectorCanAttachToWindow(window)) {
+        return;
+    }
+
+    GTRemoveInspectorOverlay(window);
+
+    UIView *overlay =
+        [[UIView alloc] initWithFrame:window.bounds];
+
+    overlay.autoresizingMask =
+        UIViewAutoresizingFlexibleWidth |
+        UIViewAutoresizingFlexibleHeight;
+
+    overlay.backgroundColor =
+        [UIColor colorWithWhite:0.0 alpha:0.06];
+
+    UILabel *hint =
+        [[UILabel alloc] initWithFrame:CGRectZero];
+
+    hint.text = @"点一下要检查的 UI";
+    hint.textAlignment = NSTextAlignmentCenter;
+    hint.textColor = UIColor.whiteColor;
+    hint.backgroundColor =
+        [UIColor colorWithWhite:0.0 alpha:0.72];
+
+    hint.font =
+        [UIFont systemFontOfSize:14.0
+                         weight:UIFontWeightSemibold];
+
+    hint.layer.cornerRadius = 12.0;
+    hint.layer.masksToBounds = YES;
+
+    CGFloat width =
+        MIN(window.bounds.size.width - 40.0, 220.0);
+
+    CGFloat y =
+        MAX(window.safeAreaInsets.top + 12.0, 18.0);
+
+    hint.frame =
+        CGRectMake((window.bounds.size.width - width) / 2.0,
+                   y,
+                   width,
+                   38.0);
+
+    hint.autoresizingMask =
+        UIViewAutoresizingFlexibleLeftMargin |
+        UIViewAutoresizingFlexibleRightMargin |
+        UIViewAutoresizingFlexibleBottomMargin;
+
+    [overlay addSubview:hint];
+
+    UITapGestureRecognizer *tap =
+        [[UITapGestureRecognizer alloc]
+         initWithTarget:self
+         action:@selector(gt_floatingInspectorOverlayTapped:)];
+
+    tap.numberOfTapsRequired = 1;
+    tap.cancelsTouchesInView = YES;
+
+    [overlay addGestureRecognizer:tap];
+    [window addSubview:overlay];
+
+    objc_setAssociatedObject(
+        window,
+        &GTInspectorOverlayKey,
+        overlay,
+        OBJC_ASSOCIATION_RETAIN_NONATOMIC
+    );
+}
+
+- (void)gt_floatingInspectorOverlayTapped:
+    (UITapGestureRecognizer *)gesture {
+
+    if (gesture.state != UIGestureRecognizerStateEnded) {
+        return;
+    }
+
+    UIView *overlay = gesture.view;
+    UIWindow *window = overlay.window;
+
+    if (!window) {
+        return;
+    }
+
+    CGPoint point = [gesture locationInView:window];
+
+    // Remove the transparent capture layer first, then ask the actual app
+    // window which original UI view exists at the same point.
+    GTRemoveInspectorOverlay(window);
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIView *hitView =
+            [window hitTest:point withEvent:nil];
+
+        if (!GTInspectorViewIsEligible(hitView)) {
+            return;
+        }
+
+        GTInspectorPresent(window, hitView);
+    });
+}
+
+@end
+
+static void GTUpdateFloatingInspector(UIWindow *window) {
+    if (!window) {
+        return;
+    }
+
+    UIButton *button =
+        objc_getAssociatedObject(window, &GTInspectorButtonKey);
+
+    BOOL shouldShow =
+        GTElementInspector &&
+        GTShouldApplyBase() &&
+        GTInspectorCanAttachToWindow(window);
+
+    if (shouldShow && !button) {
+        button = [UIButton buttonWithType:UIButtonTypeSystem];
+
+        button.frame = CGRectMake(
+            MAX(10.0, window.bounds.size.width - 58.0),
+            MAX(window.safeAreaInsets.top + 8.0, 16.0),
+            44.0,
+            44.0
+        );
+
+        button.autoresizingMask =
+            UIViewAutoresizingFlexibleLeftMargin |
+            UIViewAutoresizingFlexibleBottomMargin;
+
+        [button setTitle:@"GT"
+                forState:UIControlStateNormal];
+
+        [button setTitleColor:UIColor.whiteColor
+                     forState:UIControlStateNormal];
+
+        button.titleLabel.font =
+            [UIFont systemFontOfSize:14.0
+                             weight:UIFontWeightBold];
+
+        button.backgroundColor =
+            [UIColor colorWithRed:0.82
+                           green:0.12
+                            blue:0.95
+                           alpha:0.88];
+
+        button.layer.cornerRadius = 22.0;
+        button.layer.borderWidth = 1.0;
+        button.layer.borderColor =
+            [UIColor colorWithWhite:1.0 alpha:0.60].CGColor;
+
+        button.layer.shadowOpacity = 0.22;
+        button.layer.shadowRadius = 5.0;
+        button.layer.shadowOffset = CGSizeMake(0.0, 2.0);
+
+        [button addTarget:UIApplication.sharedApplication
+                   action:@selector(gt_floatingInspectorButtonTapped:)
+         forControlEvents:UIControlEventTouchUpInside];
+
+        [window addSubview:button];
+
+        objc_setAssociatedObject(
+            window,
+            &GTInspectorButtonKey,
+            button,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+    } else if (!shouldShow && button) {
+        [button removeFromSuperview];
+
+        objc_setAssociatedObject(
+            window,
+            &GTInspectorButtonKey,
+            nil,
+            OBJC_ASSOCIATION_RETAIN_NONATOMIC
+        );
+
+        GTRemoveInspectorOverlay(window);
+    } else if (shouldShow && button) {
+        // Keep the inspector above newly added app content.
+        [window bringSubviewToFront:button];
+    }
+}
+
 static void GTApplyDebugBorder(UIWindow *window) {
     if (!window) {
         return;
@@ -906,6 +1143,7 @@ static void GTApplyWindow(UIWindow *window) {
     BOOL apply = GTShouldApplyBase() && GTEnableWindowTint;
     GTApplyOrRestoreTint(window, apply, GTColorForComponentHex(GTWindowHex));
     GTApplyDebugBorder(window);
+    GTUpdateFloatingInspector(window);
 }
 
 static void GTApplySwitchControl(UISwitch *control) {
