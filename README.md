@@ -283,3 +283,9 @@ V0.3.4 improves the installed-App manager with real App icons, a persistent
 name/Bundle-ID search bar, configured-first sorting, compact configuration
 status text, and an icon header on each App detail page. The tweak runtime and
 color precedence are unchanged.
+
+
+## V0.3.5
+
+Compile fix for the V0.3.4 App-detail Preferences controller. The `-specifiers`
+method boundary is restored; no tweak runtime or tint behavior changed.

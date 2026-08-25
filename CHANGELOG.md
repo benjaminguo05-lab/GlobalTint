@@ -1,5 +1,18 @@
 # GlobalTint Changelog
 
+## 0.3.5
+
+- Fixed the V0.3.4 Preferences bundle compile failure.
+- Root cause: `GTAppDetailController -specifiers` was missing its final
+  `return _specifiers;` and closing brace before the App-header cell methods.
+- Because of that, Clang parsed `gtSpecifierAtIndexPath:` as if it appeared
+  inside `-specifiers`, producing the misleading `undeclared identifier`
+  error.
+- Restored the method boundary and removed the stray `return _specifiers;`
+  block that had been emitted near the end of the file.
+- Verified `GTAppListController -specifiers` already had the correct structure.
+- No tweak runtime/color behavior changes.
+
 ## 0.3.4
 
 - Upgraded the App configuration manager UI.
