@@ -1,4 +1,5 @@
 #import "GTListController.h"
+#import "GTAppListController.h"
 
 #import <Cephei/HBPreferences.h>
 #import <CoreFoundation/CoreFoundation.h>
@@ -193,7 +194,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     PSSpecifier *general =
         [PSSpecifier groupSpecifierWithName:@"GLOBAL TINT"];
     [general setProperty:
-        @"V0.3.2：新增按 App 独立开启/关闭具体组件；App 主色、App 组件颜色、全局设置与排除规则继续保留。"
+        @"V0.3.3：新增 App 配置管理器，可直接从已安装 App 列表进入每个 App 的主色、组件颜色、组件开关和排除配置。"
         forKey:@"footerText"];
     [items addObject:general];
 
@@ -209,8 +210,28 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                     allowInherit:NO
                            action:@selector(chooseAccentColor)]];
 
+    PSSpecifier *managerGroup =
+        [PSSpecifier groupSpecifierWithName:@"App 配置管理"];
+
+    [managerGroup setProperty:
+        @"推荐使用这里直接选择已安装 App。下面保留的 Bundle ID 手动配置作为高级/备用入口。"
+        forKey:@"footerText"];
+
+    [items addObject:managerGroup];
+
+    PSSpecifier *appManager =
+        [PSSpecifier preferenceSpecifierNamed:@"打开 App 配置管理器"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:[GTAppListController class]
+                                         cell:PSLinkCell
+                                         edit:nil];
+
+    [items addObject:appManager];
+
     PSSpecifier *appProfiles =
-        [PSSpecifier groupSpecifierWithName:@"App 独立主色"];
+        [PSSpecifier groupSpecifierWithName:@"App 独立主色（高级 / 手动）"];
     [appProfiles setProperty:
         @"为指定 Bundle ID 单独设置主主题色。组件独立颜色关闭时，该 App 的所有组件跟随此颜色；开启组件独立颜色后，已明确设置组件颜色的项目优先，未设置的项目继续跟随 App 独立主色。可通过 UI 元素检查器报告第一行查看 Bundle ID。"
         forKey:@"footerText"];
@@ -265,7 +286,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:clearProfiles];
 
     PSSpecifier *appComponentGroup =
-        [PSSpecifier groupSpecifierWithName:@"App 独立组件颜色"];
+        [PSSpecifier groupSpecifierWithName:@"App 独立组件颜色（高级 / 手动）"];
     [appComponentGroup setProperty:
         @"需要先开启“启用组件独立颜色”。优先级：App 独立组件颜色 > 全局组件颜色 > App 独立主色 > 全局主色。"
         forKey:@"footerText"];
@@ -318,7 +339,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     [items addObject:clearComponents];
 
     PSSpecifier *appSwitchGroup =
-        [PSSpecifier groupSpecifierWithName:@"App 独立组件开关"];
+        [PSSpecifier groupSpecifierWithName:@"App 独立组件开关（高级 / 手动）"];
     [appSwitchGroup setProperty:
         @"App 独立开关优先于单个全局组件开关；“标准控件总开关”和“Bar 总开关”仍作为组级总开关。选择“跟随全局”会删除该 App 的单项覆盖规则。"
         forKey:@"footerText"];
@@ -654,7 +675,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     // Reset
     PSSpecifier *resetGroup = [PSSpecifier emptyGroupSpecifier];
     [resetGroup setProperty:
-        @"V0.3.2 新增 App 独立组件开关。组级总开关仍拥有最高控制权；当前仍以 UIKit 公共控件为主，SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
+        @"V0.3.3 新增 App 配置管理器。原有手动 Bundle ID 配置仍保留为高级入口；当前仍以 UIKit 公共控件为主，SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
         forKey:@"footerText"];
     [items addObject:resetGroup];
 

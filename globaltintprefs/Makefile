@@ -7,7 +7,7 @@ include $(THEOS)/makefiles/common.mk
 
 BUNDLE_NAME = GlobalTintPrefs
 
-GlobalTintPrefs_FILES = GTListController.m
+GlobalTintPrefs_FILES = GTListController.m GTAppListController.m GTAppDetailController.m
 GlobalTintPrefs_FRAMEWORKS = UIKit
 GlobalTintPrefs_EXTRA_FRAMEWORKS = Cephei
 GlobalTintPrefs_LDFLAGS = -undefined dynamic_lookup
