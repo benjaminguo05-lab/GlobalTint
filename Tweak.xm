@@ -1211,6 +1211,139 @@ static void GTUpdateSceneInspectorForSourceWindow(UIWindow *sourceWindow) {
     }
 }
 
+static void GTRefreshInspectorAcrossAllScenes(void) {
+    if (!GTElementInspector ||
+        !GTShouldApplyBase() ||
+        !GTInspectorProcessIsEligible()) {
+        // Hide any previously-created inspector windows if the feature is off.
+        if (GTInspectorWindowsByScene) {
+            NSEnumerator *keyEnumerator =
+                GTInspectorWindowsByScene.keyEnumerator;
+
+            UIWindowScene *scene = nil;
+
+            while ((scene = [keyEnumerator nextObject])) {
+                GTInspectorOverlayWindow *overlayWindow =
+                    [GTInspectorWindowsByScene objectForKey:scene];
+
+                if (overlayWindow) {
+                    GTRemoveInspectorCapture(overlayWindow);
+                    overlayWindow.hidden = YES;
+                    overlayWindow.gtSourceWindow = nil;
+                }
+            }
+        }
+
+        return;
+    }
+
+    UIApplication *application = UIApplication.sharedApplication;
+
+    if (!application) {
+        return;
+    }
+
+    NSSet<UIScene *> *connectedScenes = application.connectedScenes;
+
+    for (UIScene *sceneObject in connectedScenes) {
+        if (![sceneObject isKindOfClass:[UIWindowScene class]]) {
+            continue;
+        }
+
+        UIWindowScene *scene = (UIWindowScene *)sceneObject;
+
+        if (scene.activationState == UISceneActivationStateUnattached) {
+            continue;
+        }
+
+        UIWindow *sourceWindow =
+            GTInspectorBestSourceWindow(scene);
+
+        if (sourceWindow) {
+            GTUpdateSceneInspectorForSourceWindow(sourceWindow);
+            continue;
+        }
+
+        // Even if no best source was selected yet, walk every eligible window.
+        for (UIWindow *window in scene.windows) {
+            if (GTInspectorCanUseSourceWindow(window)) {
+                GTUpdateSceneInspectorForSourceWindow(window);
+                break;
+            }
+        }
+    }
+}
+
+static void GTScheduleInspectorRefreshes(void) {
+    if (!GTElementInspector) {
+        return;
+    }
+
+    NSArray<NSNumber *> *delays = @[
+        @0.0,
+        @0.20,
+        @0.60,
+        @1.20,
+        @2.50
+    ];
+
+    for (NSNumber *delayValue in delays) {
+        NSTimeInterval delay = delayValue.doubleValue;
+
+        dispatch_after(
+            dispatch_time(
+                DISPATCH_TIME_NOW,
+                (int64_t)(delay * NSEC_PER_SEC)
+            ),
+            dispatch_get_main_queue(),
+            ^{
+                GTRefreshInspectorAcrossAllScenes();
+            }
+        );
+    }
+}
+
+@interface UIApplication (GlobalTintInspectorLifecycle)
+- (void)gt_inspectorLifecycleRefresh:(NSNotification *)notification;
+@end
+
+@implementation UIApplication (GlobalTintInspectorLifecycle)
+
+- (void)gt_inspectorLifecycleRefresh:(NSNotification *)notification {
+    GTScheduleInspectorRefreshes();
+}
+
+@end
+
+static void GTInstallInspectorLifecycleObservers(void) {
+    static dispatch_once_t onceToken;
+
+    dispatch_once(&onceToken, ^{
+        NSNotificationCenter *center =
+            NSNotificationCenter.defaultCenter;
+
+        UIApplication *application =
+            UIApplication.sharedApplication;
+
+        if (!application) {
+            return;
+        }
+
+        NSArray<NSNotificationName> *names = @[
+            UIApplicationDidBecomeActiveNotification,
+            UIWindowDidBecomeKeyNotification,
+            UIWindowDidBecomeVisibleNotification
+        ];
+
+        for (NSNotificationName name in names) {
+            [center addObserver:application
+                       selector:@selector(gt_inspectorLifecycleRefresh:)
+                           name:name
+                         object:nil];
+        }
+    });
+}
+
 static void GTApplyDebugBorder(UIWindow *window) {
     if (!window) {
         return;
@@ -2413,6 +2546,11 @@ static void GTRegisterPreferences(void) {
 
         GTRebuildExcludedBundles();
         GTRefreshKnownWindows();
+
+        GTRunOnMain(^{
+            GTRefreshInspectorAcrossAllScenes();
+            GTScheduleInspectorRefreshes();
+        });
     }];
 }
 
@@ -2438,6 +2576,12 @@ static void GTRegisterPreferences(void) {
         // override sendEvent:. Hook the exact runtime class on the main queue.
         dispatch_async(dispatch_get_main_queue(), ^{
             GTInstallExactApplicationEventHook();
+
+            // Do not wait for a UIWindow hook to fire. Proactively enumerate
+            // all scenes/windows and keep the inspector synchronized with
+            // application/window lifecycle events.
+            GTInstallInspectorLifecycleObservers();
+            GTScheduleInspectorRefreshes();
         });
     }
 }

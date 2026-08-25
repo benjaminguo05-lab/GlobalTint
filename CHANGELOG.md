@@ -1,5 +1,17 @@
 # GlobalTint Changelog
 
+## 0.2.16
+
+- Fixed the scene-overlay inspector only appearing in Settings.
+- Inspector creation no longer depends on a later `UIWindow` hook firing.
+- Proactively enumerates every connected `UIWindowScene` and its windows.
+- Re-scans when the app becomes active, a window becomes key, or a window
+  becomes visible.
+- Performs delayed refresh passes at 0.0s, 0.2s, 0.6s, 1.2s and 2.5s after
+  activation/initialization so dynamically-created App Store/Safari windows
+  are discovered.
+- Preference changes now explicitly refresh inspector windows across all scenes.
+
 ## 0.2.15
 
 - Fixed V0.2.14 compile failure caused by two obsolete inspector associated-object keys.
