@@ -1,5 +1,28 @@
 # GlobalTint Changelog
 
+## 0.4.0
+
+- Added the first SpringBoard / System UI foundation.
+- Ordinary per-App UIKit rules no longer apply broadly to SpringBoard.
+- Added a System UI master switch, disabled by default.
+- Added independent switches and colors for:
+  - Control Center
+  - Lock Screen
+  - System Menu / Context Menu / Alert surfaces
+- Added conservative private-class-name classification using each view's
+  superview chain. The foundation applies public UIKit tint only to views
+  confidently classified into one of those System UI regions.
+- System UI tint changes remember and restore original tint colors when the
+  feature or region is disabled.
+- UILabel replacement is deliberately conservative and only changes existing
+  blue-ish accent text.
+- Enabled the floating GT inspector in SpringBoard while continuing to reject
+  UISystemGesture windows/views.
+- Improved inspector hit testing for SpringBoard's multi-window architecture:
+  it now searches eligible windows from highest to lowest at the tapped point,
+  which is important for Control Center, Lock Screen and menu overlays.
+- Existing libSandy preferences and all per-App V0.3.x rules remain unchanged.
+
 ## 0.3.5
 
 - Fixed the V0.3.4 Preferences bundle compile failure.
