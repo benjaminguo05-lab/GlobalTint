@@ -267,3 +267,11 @@ V0.3.2 adds per-App component enable/disable rules. A matching App rule can
 override an individual global component switch, while the Controls/Bars master
 switches remain group-level hard gates. Choosing “follow global” removes the
 per-App rule for that component.
+
+
+## V0.3.3
+
+V0.3.3 adds an installed-App configuration manager in Settings. Select an App
+from LaunchServices and edit that App's exclusion state, accent color,
+component colors, and tri-state component enable rules from one page. Manual
+Bundle ID tools remain available as a fallback.

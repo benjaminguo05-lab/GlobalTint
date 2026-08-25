@@ -1,5 +1,25 @@
 # GlobalTint Changelog
 
+## 0.3.3
+
+- Added a dedicated installed-App configuration manager.
+- The Preferences bundle dynamically reads installed applications through
+  LaunchServices (`LSApplicationWorkspace`) without linking private headers.
+- Apps are separated into user and system groups when LaunchServices provides
+  application-type metadata.
+- Configured Bundle IDs that are not returned by LaunchServices are still
+  shown in a fallback group.
+- Added a per-App detail page with:
+  - App exclusion toggle
+  - App accent color
+  - all supported per-App component colors
+  - all supported tri-state per-App component switches
+  - clear controls for each rule family
+  - one-tap reset of the App back to global configuration
+- Existing manual Bundle ID configuration remains available as an advanced
+  fallback.
+- No changes to the V0.3.2 tweak runtime/color precedence.
+
 ## 0.3.2
 
 - Added per-App component enable/disable overrides.
