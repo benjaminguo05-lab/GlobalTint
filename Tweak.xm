@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
-#import <Cephei/HBPreferences.h>
+#include <roothide.h>
+#include <dlfcn.h>
 #import <objc/runtime.h>
 #import <objc/message.h>
 #import <QuartzCore/QuartzCore.h>
@@ -10,7 +11,7 @@
 
 static NSString * const GTPrefsIdentifier = @"com.benja.globaltint";
 
-static HBPreferences *GTPreferences = nil;
+static NSUserDefaults *GTPreferences = nil;
 static NSHashTable<UIWindow *> *GTWindows = nil;
 static NSSet<NSString *> *GTExcludedBundles = nil;
 
@@ -2397,161 +2398,246 @@ static void GTInstallExactApplicationEventHook(void) {
 
 #pragma mark - Preferences
 
-static void GTRegisterPreferences(void) {
-    GTPreferences =
-        [[HBPreferences alloc] initWithIdentifier:GTPrefsIdentifier];
+static NSString * const GTPrefsFilePath =
+    @"/var/mobile/Library/Preferences/com.benja.globaltint.plist";
 
-    [GTPreferences registerBool:&GTEnabled
-                         default:YES
-                          forKey:@"Enabled"];
+static void GTApplyPreferencesSandboxExtension(void) {
+    static dispatch_once_t onceToken;
 
-    [GTPreferences registerBool:&GTEnableWindowTint
-                         default:YES
-                          forKey:@"ApplyWindowTint"];
+    dispatch_once(&onceToken, ^{
+        NSString *sandyPath =
+            jbroot(@"/usr/lib/libsandy.dylib");
 
-    // Keep V0.1.x master switches for upgrade compatibility.
-    [GTPreferences registerBool:&GTApplyControls
-                         default:YES
-                          forKey:@"ApplyControls"];
+        void *handle =
+            dlopen(sandyPath.UTF8String, RTLD_LAZY | RTLD_LOCAL);
 
-    [GTPreferences registerBool:&GTApplyBars
-                         default:YES
-                          forKey:@"ApplyBars"];
+        if (!handle) {
+            return;
+        }
 
-    [GTPreferences registerBool:&GTUseSeparateColors
-                         default:NO
-                          forKey:@"UseSeparateColors"];
+        typedef int (*GTLibSandyApplyProfile)(const char *);
 
+        GTLibSandyApplyProfile applyProfile =
+            (GTLibSandyApplyProfile)dlsym(
+                handle,
+                "libSandy_applyProfile"
+            );
 
-    [GTPreferences registerBool:&GTReplaceSystemBlue
-                         default:NO
-                          forKey:@"ReplaceSystemBlue"];
+        if (applyProfile) {
+            applyProfile("com.benja.globaltint");
+        }
+    });
+}
 
-    [GTPreferences registerBool:&GTReplaceLinkColor
-                         default:NO
-                          forKey:@"ReplaceLinkColor"];
+static BOOL GTBoolPreference(NSString *key, BOOL fallback) {
+    id value = [GTPreferences objectForKey:key];
 
-    [GTPreferences registerBool:&GTDebugInjectionBorder
-                         default:NO
-                          forKey:@"DebugInjectionBorder"];
+    if ([value respondsToSelector:@selector(boolValue)]) {
+        return [value boolValue];
+    }
 
+    return fallback;
+}
 
-    [GTPreferences registerBool:&GTForceResolvedBlue
-                         default:NO
-                          forKey:@"ForceResolvedBlue"];
+static NSString *GTStringPreference(NSString *key,
+                                    NSString *fallback) {
+    id value = [GTPreferences objectForKey:key];
 
+    if ([value isKindOfClass:[NSString class]]) {
+        return [(NSString *)value copy];
+    }
 
-    [GTPreferences registerBool:&GTElementInspector
-                         default:NO
-                          forKey:@"ElementInspector"];
+    return [fallback copy];
+}
 
-    [GTPreferences registerBool:&GTEnableSwitch
-                         default:YES
-                          forKey:@"ApplySwitch"];
+static void GTLoadPreferencesFromDisk(void) {
+    if (!GTPreferences) {
+        return;
+    }
 
-    [GTPreferences registerBool:&GTEnableSlider
-                         default:YES
-                          forKey:@"ApplySlider"];
+    // NSUserDefaults with a full plist path is the libSandy-supported pattern
+    // for sandboxed tweak processes on modern iOS.
+    [GTPreferences synchronize];
 
-    [GTPreferences registerBool:&GTEnableProgress
-                         default:YES
-                          forKey:@"ApplyProgress"];
+    GTEnabled =
+        GTBoolPreference(@"Enabled", YES);
 
-    [GTPreferences registerBool:&GTEnableSegmented
-                         default:YES
-                          forKey:@"ApplySegmented"];
+    GTEnableWindowTint =
+        GTBoolPreference(@"ApplyWindowTint", YES);
 
-    [GTPreferences registerBool:&GTEnablePageControl
-                         default:YES
-                          forKey:@"ApplyPageControl"];
+    GTApplyControls =
+        GTBoolPreference(@"ApplyControls", YES);
 
-    [GTPreferences registerBool:&GTEnableRefreshControl
-                         default:YES
-                          forKey:@"ApplyRefreshControl"];
+    GTApplyBars =
+        GTBoolPreference(@"ApplyBars", YES);
 
-    [GTPreferences registerBool:&GTEnableNavigationBar
-                         default:YES
-                          forKey:@"ApplyNavigationBar"];
+    GTUseSeparateColors =
+        GTBoolPreference(@"UseSeparateColors", NO);
 
-    [GTPreferences registerBool:&GTEnableTabBar
-                         default:YES
-                          forKey:@"ApplyTabBar"];
+    GTReplaceSystemBlue =
+        GTBoolPreference(@"ReplaceSystemBlue", NO);
 
-    [GTPreferences registerBool:&GTEnableToolbar
-                         default:YES
-                          forKey:@"ApplyToolbar"];
+    GTReplaceLinkColor =
+        GTBoolPreference(@"ReplaceLinkColor", NO);
 
-    [GTPreferences registerBool:&GTEnableSearchBar
-                         default:YES
-                          forKey:@"ApplySearchBar"];
+    GTDebugInjectionBorder =
+        GTBoolPreference(@"DebugInjectionBorder", NO);
 
-    [GTPreferences registerObject:(id *)&GTAccentHex
-                          default:@"#0A84FF"
-                           forKey:@"AccentColor"];
+    GTForceResolvedBlue =
+        GTBoolPreference(@"ForceResolvedBlue", NO);
 
-    [GTPreferences registerObject:(id *)&GTWindowHex
-                          default:@""
-                           forKey:@"WindowColor"];
+    GTElementInspector =
+        GTBoolPreference(@"ElementInspector", NO);
 
-    [GTPreferences registerObject:(id *)&GTSwitchHex
-                          default:@""
-                           forKey:@"SwitchColor"];
+    GTEnableSwitch =
+        GTBoolPreference(@"ApplySwitch", YES);
 
-    [GTPreferences registerObject:(id *)&GTSliderHex
-                          default:@""
-                           forKey:@"SliderColor"];
+    GTEnableSlider =
+        GTBoolPreference(@"ApplySlider", YES);
 
-    [GTPreferences registerObject:(id *)&GTProgressHex
-                          default:@""
-                           forKey:@"ProgressColor"];
+    GTEnableProgress =
+        GTBoolPreference(@"ApplyProgress", YES);
 
-    [GTPreferences registerObject:(id *)&GTSegmentedHex
-                          default:@""
-                           forKey:@"SegmentedColor"];
+    GTEnableSegmented =
+        GTBoolPreference(@"ApplySegmented", YES);
 
-    [GTPreferences registerObject:(id *)&GTPageControlHex
-                          default:@""
-                           forKey:@"PageControlColor"];
+    GTEnablePageControl =
+        GTBoolPreference(@"ApplyPageControl", YES);
 
-    [GTPreferences registerObject:(id *)&GTRefreshControlHex
-                          default:@""
-                           forKey:@"RefreshControlColor"];
+    GTEnableRefreshControl =
+        GTBoolPreference(@"ApplyRefreshControl", YES);
 
-    [GTPreferences registerObject:(id *)&GTNavigationBarHex
-                          default:@""
-                           forKey:@"NavigationBarColor"];
+    GTEnableNavigationBar =
+        GTBoolPreference(@"ApplyNavigationBar", YES);
 
-    [GTPreferences registerObject:(id *)&GTTabBarHex
-                          default:@""
-                           forKey:@"TabBarColor"];
+    GTEnableTabBar =
+        GTBoolPreference(@"ApplyTabBar", YES);
 
-    [GTPreferences registerObject:(id *)&GTToolbarHex
-                          default:@""
-                           forKey:@"ToolbarColor"];
+    GTEnableToolbar =
+        GTBoolPreference(@"ApplyToolbar", YES);
 
-    [GTPreferences registerObject:(id *)&GTSearchBarHex
-                          default:@""
-                           forKey:@"SearchBarColor"];
+    GTEnableSearchBar =
+        GTBoolPreference(@"ApplySearchBar", YES);
 
-    [GTPreferences registerObject:(id *)&GTExcludedBundleIDs
-                          default:@""
-                           forKey:@"ExcludedBundleIDs"];
+    GTAccentHex =
+        GTStringPreference(@"AccentColor", @"#0A84FF");
 
-    GTAccentColor = GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
+    GTSemanticBlueHex =
+        GTStringPreference(@"SemanticBlueColor", @"");
+
+    GTWindowHex =
+        GTStringPreference(@"WindowColor", @"");
+
+    GTSwitchHex =
+        GTStringPreference(@"SwitchColor", @"");
+
+    GTSliderHex =
+        GTStringPreference(@"SliderColor", @"");
+
+    GTProgressHex =
+        GTStringPreference(@"ProgressColor", @"");
+
+    GTSegmentedHex =
+        GTStringPreference(@"SegmentedColor", @"");
+
+    GTPageControlHex =
+        GTStringPreference(@"PageControlColor", @"");
+
+    GTRefreshControlHex =
+        GTStringPreference(@"RefreshControlColor", @"");
+
+    GTNavigationBarHex =
+        GTStringPreference(@"NavigationBarColor", @"");
+
+    GTTabBarHex =
+        GTStringPreference(@"TabBarColor", @"");
+
+    GTToolbarHex =
+        GTStringPreference(@"ToolbarColor", @"");
+
+    GTSearchBarHex =
+        GTStringPreference(@"SearchBarColor", @"");
+
+    GTExcludedBundleIDs =
+        GTStringPreference(@"ExcludedBundleIDs", @"");
+
+    GTAccentColor =
+        GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
+
     GTRebuildExcludedBundles();
+}
 
-    [GTPreferences registerPreferenceChangeBlock:^{
-        GTAccentColor =
-            GTColorFromHexOrNil(GTAccentHex) ?: GTDefaultAccentColor();
+static void GTPreferencesDarwinCallback(
+    CFNotificationCenterRef center,
+    void *observer,
+    CFStringRef name,
+    const void *object,
+    CFDictionaryRef userInfo
+) {
+    GTLoadPreferencesFromDisk();
 
-        GTRebuildExcludedBundles();
-        GTRefreshKnownWindows();
+    GTRefreshKnownWindows();
 
-        GTRunOnMain(^{
-            GTRefreshInspectorAcrossAllScenes();
-            GTScheduleInspectorRefreshes();
-        });
+    GTRunOnMain(^{
+        GTRefreshInspectorAcrossAllScenes();
+        GTScheduleInspectorRefreshes();
+    });
+}
+
+static void GTRegisterPreferences(void) {
+    GTApplyPreferencesSandboxExtension();
+
+    GTPreferences =
+        [[NSUserDefaults alloc]
+         initWithSuiteName:GTPrefsFilePath];
+
+    [GTPreferences registerDefaults:@{
+        @"Enabled": @YES,
+        @"ApplyWindowTint": @YES,
+        @"ApplyControls": @YES,
+        @"ApplyBars": @YES,
+        @"UseSeparateColors": @NO,
+        @"ReplaceSystemBlue": @NO,
+        @"ReplaceLinkColor": @NO,
+        @"DebugInjectionBorder": @NO,
+        @"ForceResolvedBlue": @NO,
+        @"ElementInspector": @NO,
+        @"ApplySwitch": @YES,
+        @"ApplySlider": @YES,
+        @"ApplyProgress": @YES,
+        @"ApplySegmented": @YES,
+        @"ApplyPageControl": @YES,
+        @"ApplyRefreshControl": @YES,
+        @"ApplyNavigationBar": @YES,
+        @"ApplyTabBar": @YES,
+        @"ApplyToolbar": @YES,
+        @"ApplySearchBar": @YES,
+        @"AccentColor": @"#0A84FF",
+        @"SemanticBlueColor": @"",
+        @"WindowColor": @"",
+        @"SwitchColor": @"",
+        @"SliderColor": @"",
+        @"ProgressColor": @"",
+        @"SegmentedColor": @"",
+        @"PageControlColor": @"",
+        @"RefreshControlColor": @"",
+        @"NavigationBarColor": @"",
+        @"TabBarColor": @"",
+        @"ToolbarColor": @"",
+        @"SearchBarColor": @"",
+        @"ExcludedBundleIDs": @""
     }];
+
+    GTLoadPreferencesFromDisk();
+
+    CFNotificationCenterAddObserver(
+        CFNotificationCenterGetDarwinNotifyCenter(),
+        NULL,
+        GTPreferencesDarwinCallback,
+        CFSTR("com.benja.globaltint/ReloadPrefs"),
+        NULL,
+        CFNotificationSuspensionBehaviorDeliverImmediately
+    );
 }
 
 #pragma mark - Bootstrap

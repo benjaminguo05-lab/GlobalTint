@@ -1,5 +1,23 @@
 # GlobalTint Changelog
 
+## 0.2.19
+
+- Identified the core sandbox preference issue: HBPreferences can return only
+  default values inside App Store sandboxed apps even when the tweak itself is
+  injected.
+- The tweak dylib no longer uses Cephei/HBPreferences at runtime.
+- Added a libSandy profile granting access only to
+  `/var/mobile/Library/Preferences/com.benja.globaltint.plist`.
+- The tweak applies that profile and reads preferences with
+  `NSUserDefaults initWithSuiteName:` using the full plist path, following
+  libSandy's documented preference-access pattern.
+- PreferenceLoader bundle still uses HBPreferences because Settings is not
+  affected by the same sandbox limitation.
+- Added Darwin-notification reload so preference changes still update injected
+  processes live.
+- Removed Cephei as a runtime dependency of the tweak dylib itself.
+- Added `com.opa334.libsandy` package dependency.
+
 ## 0.2.18
 
 - Replaced the restrictive UIKit/Class Substrate filter with the classic
