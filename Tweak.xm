@@ -633,8 +633,8 @@ static void GTUpdateInspectorGesture(UIWindow *window) {
              initWithTarget:UIApplication.sharedApplication
              action:@selector(gt_handleGlobalTintInspector:)];
 
-        gesture.minimumPressDuration = 0.7;
-        gesture.numberOfTouchesRequired = 2;
+        gesture.minimumPressDuration = 0.8;
+        gesture.numberOfTouchesRequired = 1;
         gesture.cancelsTouchesInView = NO;
         gesture.delaysTouchesBegan = NO;
 

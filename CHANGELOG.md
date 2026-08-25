@@ -1,5 +1,11 @@
 # GlobalTint Changelog
 
+## 0.2.8
+
+- Changed the UI inspector activation gesture from two-finger long press to one-finger long press.
+- Inspector hold duration is now 0.8 seconds to reduce accidental activation.
+- `cancelsTouchesInView` remains disabled so normal controls are disturbed as little as possible.
+
 ## 0.2.7
 
 - Added an on-device UI element inspector for private UIKit / SwiftUI diagnosis.
