@@ -1,5 +1,13 @@
 # GlobalTint Changelog
 
+## 0.2.15
+
+- Fixed V0.2.14 compile failure caused by two obsolete inspector associated-object keys.
+- Removed `GTInspectorButtonKey`.
+- Removed `GTInspectorOverlayKey`.
+- These keys belonged to the V0.2.13 in-window floating inspector and are no longer used by the V0.2.14 scene-overlay inspector.
+- Added a static source scan for unused file-scope helper variables/functions before packaging.
+
 ## 0.2.14
 
 - Fixed the floating `GT` inspector button only being visible in Settings.

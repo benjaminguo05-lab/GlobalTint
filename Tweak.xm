@@ -88,8 +88,6 @@ static char GTOriginalResolvedTextColorKey;
 static char GTInspectorTrackedTouchKey;
 static char GTInspectorStartPointKey;
 static char GTInspectorTokenKey;
-static char GTInspectorButtonKey;
-static char GTInspectorOverlayKey;
 
 static BOOL GTShouldApplyBase(void);
 static BOOL GTInspectorProcessIsEligible(void);
