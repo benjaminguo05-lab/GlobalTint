@@ -13,6 +13,7 @@ static CFStringRef const GTReloadNotification =
 @property (nonatomic, copy) NSString *gtPendingColorKey;
 @property (nonatomic, copy) NSString *gtPendingColorDefault;
 @property (nonatomic, copy) NSString *gtPendingAppBundleID;
+@property (nonatomic, copy) NSString *gtPendingAppComponentKey;
 @end
 
 static UIColor *GTColorFromHexString(NSString *hex) {
@@ -192,7 +193,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     PSSpecifier *general =
         [PSSpecifier groupSpecifierWithName:@"GLOBAL TINT"];
     [general setProperty:
-        @"V0.3：新增按 App 设置独立主色；原有组件独立颜色、组件开关和 App 排除继续保留。"
+        @"V0.3.1：支持按 App 设置独立主色和独立组件颜色；原有全局组件颜色、组件开关和 App 排除继续保留。"
         forKey:@"footerText"];
     [items addObject:general];
 
@@ -262,6 +263,59 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                                          edit:nil];
     clearProfiles.buttonAction = @selector(clearAppColorOverrides);
     [items addObject:clearProfiles];
+
+    PSSpecifier *appComponentGroup =
+        [PSSpecifier groupSpecifierWithName:@"App 独立组件颜色"];
+    [appComponentGroup setProperty:
+        @"需要先开启“启用组件独立颜色”。优先级：App 独立组件颜色 > 全局组件颜色 > App 独立主色 > 全局主色。"
+        forKey:@"footerText"];
+    [items addObject:appComponentGroup];
+
+    PSSpecifier *componentSummary =
+        [PSSpecifier preferenceSpecifierNamed:@"已配置组件规则"
+                                       target:self
+                                          set:nil
+                                          get:@selector(appComponentOverrideSummary:)
+                                       detail:nil
+                                         cell:PSTitleValueCell
+                                         edit:nil];
+    [items addObject:componentSummary];
+
+    PSSpecifier *addComponent =
+        [PSSpecifier preferenceSpecifierNamed:@"添加 / 修改 App 组件颜色"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    addComponent.buttonAction =
+        @selector(addOrEditAppComponentColorOverride);
+    [items addObject:addComponent];
+
+    PSSpecifier *removeComponent =
+        [PSSpecifier preferenceSpecifierNamed:@"删除 App 组件颜色"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    removeComponent.buttonAction =
+        @selector(removeAppComponentColorOverride);
+    [items addObject:removeComponent];
+
+    PSSpecifier *clearComponents =
+        [PSSpecifier preferenceSpecifierNamed:@"清空全部 App 组件颜色"
+                                       target:self
+                                          set:nil
+                                          get:nil
+                                       detail:nil
+                                         cell:PSButtonCell
+                                         edit:nil];
+    clearComponents.buttonAction =
+        @selector(clearAppComponentColorOverrides);
+    [items addObject:clearComponents];
 
 
     PSSpecifier *compatGroup =
@@ -542,7 +596,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     // Reset
     PSSpecifier *resetGroup = [PSSpecifier emptyGroupSpecifier];
     [resetGroup setProperty:
-        @"V0.3.0 首先加入 App 独立主色。当前仍以 UIKit 公共控件为主；SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
+        @"V0.3.1 新增 App 独立组件颜色。当前仍以 UIKit 公共控件为主；SpringBoard、控制中心、锁屏以及更深层 SwiftUI / 私有组件将在后续版本继续扩展。"
         forKey:@"footerText"];
     [items addObject:resetGroup];
 
@@ -696,6 +750,39 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
     HBPreferences *preferences = [self preferences];
 
+    if (self.gtPendingAppBundleID.length > 0 &&
+        self.gtPendingAppComponentKey.length > 0) {
+
+        NSDictionary *stored =
+            [preferences objectForKey:@"AppComponentColorOverrides"];
+
+        NSMutableDictionary *allProfiles =
+            [stored isKindOfClass:[NSDictionary class]]
+            ? [stored mutableCopy]
+            : [NSMutableDictionary dictionary];
+
+        NSString *bundleID =
+            self.gtPendingAppBundleID.lowercaseString;
+
+        NSDictionary *existingRules =
+            [allProfiles[bundleID]
+             isKindOfClass:[NSDictionary class]]
+            ? allProfiles[bundleID]
+            : @{};
+
+        NSMutableDictionary *rules =
+            [existingRules mutableCopy];
+
+        rules[self.gtPendingAppComponentKey] = hex;
+        allProfiles[bundleID] = [rules copy];
+
+        [preferences setObject:[allProfiles copy]
+                        forKey:@"AppComponentColorOverrides"];
+
+        [self postReloadNotification];
+        return;
+    }
+
     if (self.gtPendingAppBundleID.length > 0) {
         NSDictionary *stored =
             [preferences objectForKey:@"AppColorOverrides"];
@@ -728,6 +815,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     self.gtPendingColorKey = nil;
     self.gtPendingColorDefault = nil;
     self.gtPendingAppBundleID = nil;
+    self.gtPendingAppComponentKey = nil;
 
     [self reloadSpecifiers];
 }
@@ -823,6 +911,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
         self.gtPendingColorKey = nil;
         self.gtPendingColorDefault = nil;
         self.gtPendingAppBundleID = normalized;
+        self.gtPendingAppComponentKey = nil;
 
         NSDictionary *profiles = [self appColorOverrides];
         NSString *stored = profiles[normalized];
@@ -1022,6 +1111,440 @@ static NSString *GTHexStringFromColor(UIColor *color) {
                      completion:nil];
 }
 
+#pragma mark - App component color profiles
+
+- (NSDictionary<NSString *,
+                  NSDictionary<NSString *, NSString *> *> *)
+appComponentColorOverrides {
+    id value =
+        [[self preferences]
+         objectForKey:@"AppComponentColorOverrides"];
+
+    if (![value isKindOfClass:[NSDictionary class]]) {
+        return @{};
+    }
+
+    return [(NSDictionary *)value copy];
+}
+
+- (NSDictionary<NSString *, NSString *> *)appComponentNames {
+    return @{
+        @"WindowColor": @"Window",
+        @"SwitchColor": @"Switch",
+        @"SliderColor": @"Slider",
+        @"ProgressColor": @"Progress",
+        @"SegmentedColor": @"SegmentedControl",
+        @"PageControlColor": @"PageControl",
+        @"RefreshControlColor": @"RefreshControl",
+        @"NavigationBarColor": @"NavigationBar",
+        @"TabBarColor": @"TabBar",
+        @"ToolbarColor": @"Toolbar",
+        @"SearchBarColor": @"SearchBar"
+    };
+}
+
+- (id)appComponentOverrideSummary:(PSSpecifier *)specifier {
+    NSDictionary *profiles =
+        [self appComponentColorOverrides];
+
+    NSInteger ruleCount = 0;
+
+    for (id value in profiles.allValues) {
+        if ([value isKindOfClass:[NSDictionary class]]) {
+            ruleCount += [(NSDictionary *)value count];
+        }
+    }
+
+    if (ruleCount == 0) {
+        return @"未设置";
+    }
+
+    return [NSString stringWithFormat:@"%ld 条",
+            (long)ruleCount];
+}
+
+- (void)presentAppComponentColorPickerForBundleID:(NSString *)bundleID
+                                      componentKey:(NSString *)componentKey {
+    if (@available(iOS 14.0, *)) {
+        NSString *normalized =
+            [[bundleID
+              stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]]
+             lowercaseString];
+
+        if (normalized.length == 0 ||
+            componentKey.length == 0) {
+            return;
+        }
+
+        NSDictionary *componentNames =
+            [self appComponentNames];
+
+        NSString *componentName =
+            componentNames[componentKey];
+
+        if (componentName.length == 0) {
+            return;
+        }
+
+        self.gtPendingColorKey = nil;
+        self.gtPendingColorDefault = nil;
+        self.gtPendingAppBundleID = normalized;
+        self.gtPendingAppComponentKey = componentKey;
+
+        NSDictionary *profiles =
+            [self appComponentColorOverrides];
+
+        NSDictionary *rules =
+            [profiles[normalized]
+             isKindOfClass:[NSDictionary class]]
+            ? profiles[normalized]
+            : @{};
+
+        NSString *stored = rules[componentKey];
+
+        HBPreferences *preferences = [self preferences];
+
+        NSDictionary *appAccents =
+            [preferences objectForKey:@"AppColorOverrides"];
+
+        NSString *appAccent =
+            [appAccents isKindOfClass:[NSDictionary class]]
+            ? appAccents[normalized]
+            : nil;
+
+        NSString *globalAccent =
+            [preferences objectForKey:@"AccentColor"];
+
+        NSString *hex =
+            ([stored isKindOfClass:[NSString class]] &&
+             stored.length > 0)
+            ? stored
+            : (([appAccent isKindOfClass:[NSString class]] &&
+                appAccent.length > 0)
+               ? appAccent
+               : (([globalAccent isKindOfClass:[NSString class]] &&
+                   globalAccent.length > 0)
+                  ? globalAccent
+                  : @"#0A84FF"));
+
+        UIColorPickerViewController *picker =
+            [[UIColorPickerViewController alloc] init];
+
+        picker.delegate = self;
+        picker.supportsAlpha = NO;
+
+        picker.title =
+            [NSString stringWithFormat:@"%@ · %@",
+             normalized,
+             componentName];
+
+        picker.selectedColor =
+            GTColorFromHexString(hex);
+
+        [self presentViewController:picker
+                           animated:YES
+                         completion:nil];
+    }
+}
+
+- (void)chooseAppComponentForBundleID:(NSString *)bundleID {
+    UIAlertController *sheet =
+        [UIAlertController alertControllerWithTitle:@"选择组件"
+                                            message:bundleID
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+
+    NSDictionary<NSString *, NSString *> *names =
+        [self appComponentNames];
+
+    NSArray<NSString *> *orderedKeys = @[
+        @"WindowColor",
+        @"SwitchColor",
+        @"SliderColor",
+        @"ProgressColor",
+        @"SegmentedColor",
+        @"PageControlColor",
+        @"RefreshControlColor",
+        @"NavigationBarColor",
+        @"TabBarColor",
+        @"ToolbarColor",
+        @"SearchBarColor"
+    ];
+
+    __weak typeof(self) weakSelf = self;
+
+    for (NSString *key in orderedKeys) {
+        NSString *title = names[key];
+
+        [sheet addAction:
+            [UIAlertAction actionWithTitle:title
+                                     style:UIAlertActionStyleDefault
+                                   handler:^(__unused UIAlertAction *action) {
+            [weakSelf
+                presentAppComponentColorPickerForBundleID:bundleID
+                                             componentKey:key];
+        }]];
+    }
+
+    [sheet addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    if (sheet.popoverPresentationController) {
+        sheet.popoverPresentationController.sourceView = self.view;
+        sheet.popoverPresentationController.sourceRect =
+            CGRectMake(
+                CGRectGetMidX(self.view.bounds),
+                CGRectGetMidY(self.view.bounds),
+                1.0,
+                1.0
+            );
+    }
+
+    [self presentViewController:sheet
+                       animated:YES
+                     completion:nil];
+}
+
+- (void)addOrEditAppComponentColorOverride {
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"App 组件颜色"
+                                            message:@"输入 Bundle ID，然后选择要单独改色的组件。"
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    [alert addTextFieldWithConfigurationHandler:
+        ^(UITextField *textField) {
+        textField.placeholder = @"例如 com.apple.AppStore";
+        textField.autocorrectionType =
+            UITextAutocorrectionTypeNo;
+        textField.autocapitalizationType =
+            UITextAutocapitalizationTypeNone;
+        textField.clearButtonMode =
+            UITextFieldViewModeWhileEditing;
+    }];
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    __weak typeof(self) weakSelf = self;
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"下一步"
+                                 style:UIAlertActionStyleDefault
+                               handler:^(__unused UIAlertAction *action) {
+
+        NSString *bundleID =
+            alert.textFields.firstObject.text ?: @"";
+
+        bundleID =
+            [bundleID stringByTrimmingCharactersInSet:
+                [NSCharacterSet whitespaceAndNewlineCharacterSet]];
+
+        if (bundleID.length == 0) {
+            return;
+        }
+
+        [weakSelf chooseAppComponentForBundleID:bundleID];
+    }]];
+
+    [self presentViewController:alert
+                       animated:YES
+                     completion:nil];
+}
+
+- (void)removeAppComponentColorOverride {
+    NSDictionary *profiles =
+        [self appComponentColorOverrides];
+
+    NSMutableArray<NSDictionary *> *entries =
+        [NSMutableArray array];
+
+    NSDictionary *names =
+        [self appComponentNames];
+
+    for (NSString *bundleID in profiles) {
+        id rawRules = profiles[bundleID];
+
+        if (![rawRules isKindOfClass:[NSDictionary class]]) {
+            continue;
+        }
+
+        NSDictionary *rules = rawRules;
+
+        for (NSString *componentKey in rules) {
+            NSString *hex = rules[componentKey];
+
+            if (![hex isKindOfClass:[NSString class]]) {
+                continue;
+            }
+
+            [entries addObject:@{
+                @"bundleID": bundleID,
+                @"componentKey": componentKey,
+                @"componentName": names[componentKey] ?: componentKey,
+                @"hex": hex
+            }];
+        }
+    }
+
+    if (entries.count == 0) {
+        UIAlertController *empty =
+            [UIAlertController alertControllerWithTitle:@"没有组件规则"
+                                                message:@"当前没有可删除的 App 独立组件颜色。"
+                                         preferredStyle:UIAlertControllerStyleAlert];
+
+        [empty addAction:
+            [UIAlertAction actionWithTitle:@"好"
+                                     style:UIAlertActionStyleDefault
+                                   handler:nil]];
+
+        [self presentViewController:empty
+                           animated:YES
+                         completion:nil];
+        return;
+    }
+
+    [entries sortUsingComparator:
+        ^NSComparisonResult(NSDictionary *left,
+                            NSDictionary *right) {
+        NSString *a =
+            [NSString stringWithFormat:@"%@ %@",
+             left[@"bundleID"],
+             left[@"componentName"]];
+
+        NSString *b =
+            [NSString stringWithFormat:@"%@ %@",
+             right[@"bundleID"],
+             right[@"componentName"]];
+
+        return [a localizedCaseInsensitiveCompare:b];
+    }];
+
+    UIAlertController *sheet =
+        [UIAlertController alertControllerWithTitle:@"删除 App 组件颜色"
+                                            message:nil
+                                     preferredStyle:UIAlertControllerStyleActionSheet];
+
+    __weak typeof(self) weakSelf = self;
+
+    for (NSDictionary *entry in entries) {
+        NSString *bundleID = entry[@"bundleID"];
+        NSString *componentKey = entry[@"componentKey"];
+
+        NSString *title =
+            [NSString stringWithFormat:@"%@ · %@ · %@",
+             bundleID,
+             entry[@"componentName"],
+             entry[@"hex"]];
+
+        [sheet addAction:
+            [UIAlertAction actionWithTitle:title
+                                     style:UIAlertActionStyleDestructive
+                                   handler:^(__unused UIAlertAction *action) {
+
+            HBPreferences *preferences =
+                [weakSelf preferences];
+
+            NSDictionary *stored =
+                [preferences
+                 objectForKey:@"AppComponentColorOverrides"];
+
+            NSMutableDictionary *allProfiles =
+                [stored isKindOfClass:[NSDictionary class]]
+                ? [stored mutableCopy]
+                : [NSMutableDictionary dictionary];
+
+            NSDictionary *existingRules =
+                [allProfiles[bundleID]
+                 isKindOfClass:[NSDictionary class]]
+                ? allProfiles[bundleID]
+                : @{};
+
+            NSMutableDictionary *rules =
+                [existingRules mutableCopy];
+
+            [rules removeObjectForKey:componentKey];
+
+            if (rules.count == 0) {
+                [allProfiles removeObjectForKey:bundleID];
+            } else {
+                allProfiles[bundleID] = [rules copy];
+            }
+
+            [preferences setObject:[allProfiles copy]
+                            forKey:@"AppComponentColorOverrides"];
+
+            [weakSelf postReloadNotification];
+            [weakSelf reloadSpecifiers];
+        }]];
+    }
+
+    [sheet addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    if (sheet.popoverPresentationController) {
+        sheet.popoverPresentationController.sourceView =
+            self.view;
+
+        sheet.popoverPresentationController.sourceRect =
+            CGRectMake(
+                CGRectGetMidX(self.view.bounds),
+                CGRectGetMidY(self.view.bounds),
+                1.0,
+                1.0
+            );
+    }
+
+    [self presentViewController:sheet
+                       animated:YES
+                     completion:nil];
+}
+
+- (void)clearAppComponentColorOverrides {
+    NSDictionary *profiles =
+        [self appComponentColorOverrides];
+
+    if (profiles.count == 0) {
+        return;
+    }
+
+    UIAlertController *alert =
+        [UIAlertController alertControllerWithTitle:@"清空 App 组件颜色"
+                                            message:@"删除全部 App 独立组件颜色配置？"
+                                     preferredStyle:UIAlertControllerStyleAlert];
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"取消"
+                                 style:UIAlertActionStyleCancel
+                               handler:nil]];
+
+    __weak typeof(self) weakSelf = self;
+
+    [alert addAction:
+        [UIAlertAction actionWithTitle:@"清空"
+                                 style:UIAlertActionStyleDestructive
+                               handler:^(__unused UIAlertAction *action) {
+
+        HBPreferences *preferences =
+            [weakSelf preferences];
+
+        [preferences
+            removeObjectForKey:@"AppComponentColorOverrides"];
+
+        [weakSelf postReloadNotification];
+        [weakSelf reloadSpecifiers];
+    }]];
+
+    [self presentViewController:alert
+                       animated:YES
+                     completion:nil];
+}
+
 #pragma mark - App exclusions
 
 - (id)excludedBundleSummary:(PSSpecifier *)specifier {
@@ -1117,7 +1640,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 - (void)resetPreferences {
     UIAlertController *alert =
         [UIAlertController alertControllerWithTitle:@"恢复默认设置"
-                                            message:@"将主色、App 独立主色、组件颜色、组件开关以及 App 排除列表全部恢复为默认值。"
+                                            message:@"将主色、App 独立主色、App 独立组件颜色、全局组件颜色、组件开关以及 App 排除列表全部恢复为默认值。"
                                      preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addAction:
