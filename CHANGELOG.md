@@ -1,5 +1,23 @@
 # GlobalTint Changelog
 
+## 0.2.20
+
+- Stable cleanup release after V0.2.19 fixed sandbox preference access.
+- Kept the proven runtime architecture:
+  - RootHide/Relaxin injection
+  - broad `com.apple.Security` Substrate filter
+  - libSandy preference-file access
+  - UIKit component / bar hooks
+  - optional per-scene floating `GT` inspector
+- Removed the obsolete single-finger long-press inspector implementation.
+- Removed the runtime `UIApplication sendEvent:` replacement and private
+  UIApplication subclass swizzling used only by that old inspector.
+- Removed obsolete touch-tracking associated-object keys and sequence state.
+- Removed an unused tweak-side preference identifier constant.
+- Cleaned the Settings diagnostics footer so it describes only the current
+  floating `GT` inspector workflow.
+- No intended changes to tint/color behavior.
+
 ## 0.2.19
 
 - Identified the core sandbox preference issue: HBPreferences can return only

@@ -9,8 +9,6 @@
 @interface BrowserToolbar : UIView
 @end
 
-static NSString * const GTPrefsIdentifier = @"com.benja.globaltint";
-
 static NSUserDefaults *GTPreferences = nil;
 static NSHashTable<UIWindow *> *GTWindows = nil;
 static NSSet<NSString *> *GTExcludedBundles = nil;
@@ -40,7 +38,7 @@ static BOOL GTEnableSearchBar = YES;
 // Color mode
 static BOOL GTUseSeparateColors = NO;
 
-// V0.2.2 compatibility / diagnostics
+// Compatibility / diagnostics
 static BOOL GTReplaceSystemBlue = NO;
 static BOOL GTReplaceLinkColor = NO;
 static BOOL GTDebugInjectionBorder = NO;
@@ -86,9 +84,6 @@ static char GTOriginalWindowBorderWidthKey;
 static char GTOriginalWindowBorderColorKey;
 static char GTOriginalResolvedTintKey;
 static char GTOriginalResolvedTextColorKey;
-static char GTInspectorTrackedTouchKey;
-static char GTInspectorStartPointKey;
-static char GTInspectorTokenKey;
 
 static BOOL GTShouldApplyBase(void);
 static BOOL GTInspectorProcessIsEligible(void);
@@ -593,127 +588,6 @@ static void GTInspectorPresent(UIWindow *window, UIView *hitView) {
                           completion:nil];
 }
 
-static NSUInteger GTInspectorSequence = 0;
-
-static void GTCancelInspectorTouch(UIWindow *window, UITouch *touch) {
-    if (!window) {
-        return;
-    }
-
-    UITouch *tracked =
-        objc_getAssociatedObject(window, &GTInspectorTrackedTouchKey);
-
-    if (!touch || tracked == touch) {
-        objc_setAssociatedObject(
-            window,
-            &GTInspectorTrackedTouchKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-
-        objc_setAssociatedObject(
-            window,
-            &GTInspectorStartPointKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-
-        objc_setAssociatedObject(
-            window,
-            &GTInspectorTokenKey,
-            nil,
-            OBJC_ASSOCIATION_RETAIN_NONATOMIC
-        );
-    }
-}
-
-static void GTBeginInspectorTouch(UIWindow *window, UITouch *touch) {
-    if (!window || !touch) {
-        return;
-    }
-
-    CGPoint startPoint = [touch locationInView:window];
-    NSNumber *token = @(++GTInspectorSequence);
-
-    objc_setAssociatedObject(
-        window,
-        &GTInspectorTrackedTouchKey,
-        touch,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    );
-
-    objc_setAssociatedObject(
-        window,
-        &GTInspectorStartPointKey,
-        [NSValue valueWithCGPoint:startPoint],
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    );
-
-    objc_setAssociatedObject(
-        window,
-        &GTInspectorTokenKey,
-        token,
-        OBJC_ASSOCIATION_RETAIN_NONATOMIC
-    );
-
-    dispatch_after(
-        dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.8 * NSEC_PER_SEC)),
-        dispatch_get_main_queue(),
-        ^{
-            if (!GTElementInspector || !GTShouldApplyBase()) {
-                return;
-            }
-
-            NSNumber *currentToken =
-                objc_getAssociatedObject(window, &GTInspectorTokenKey);
-
-            UITouch *tracked =
-                objc_getAssociatedObject(window, &GTInspectorTrackedTouchKey);
-
-            NSValue *startValue =
-                objc_getAssociatedObject(window, &GTInspectorStartPointKey);
-
-            if (![currentToken isEqual:token] ||
-                tracked != touch ||
-                !startValue) {
-                return;
-            }
-
-            if (touch.phase == UITouchPhaseEnded ||
-                touch.phase == UITouchPhaseCancelled) {
-                GTCancelInspectorTouch(window, touch);
-                return;
-            }
-
-            CGPoint originalPoint = startValue.CGPointValue;
-            CGPoint currentPoint = [touch locationInView:window];
-
-            CGFloat dx = currentPoint.x - originalPoint.x;
-            CGFloat dy = currentPoint.y - originalPoint.y;
-            CGFloat distanceSquared = dx * dx + dy * dy;
-
-            // Cancel if the finger moved more than ~18 points.
-            if (distanceSquared > (18.0 * 18.0)) {
-                GTCancelInspectorTouch(window, touch);
-                return;
-            }
-
-            // Clear tracking before presenting the alert so the current
-            // touch cannot trigger the inspector twice.
-            GTCancelInspectorTouch(window, touch);
-
-            UIView *hitView =
-                [window hitTest:currentPoint withEvent:nil];
-
-            if (!GTInspectorViewIsEligible(hitView)) {
-                return;
-            }
-
-            GTInspectorPresent(window, hitView);
-        }
-    );
-}
-
 static BOOL GTInspectorProcessIsEligible(void) {
     NSString *bundleID =
         NSBundle.mainBundle.bundleIdentifier.lowercaseString;
@@ -760,77 +634,6 @@ static BOOL GTInspectorViewIsEligible(UIView *view) {
     }
 
     return YES;
-}
-
-static void GTProcessInspectorEvent(UIEvent *event) {
-    if (!GTElementInspector ||
-        !GTShouldApplyBase() ||
-        !GTInspectorProcessIsEligible() ||
-        event.type != UIEventTypeTouches) {
-        return;
-    }
-
-    NSSet<UITouch *> *touches = event.allTouches;
-
-    if (touches.count == 0) {
-        return;
-    }
-
-    for (UITouch *touch in touches) {
-        UIWindow *window = touch.window;
-
-        if (!GTInspectorWindowIsEligible(window)) {
-            continue;
-        }
-
-        switch (touch.phase) {
-            case UITouchPhaseBegan: {
-                // Inspector is intentionally single-finger only.
-                if (touches.count == 1) {
-                    GTBeginInspectorTouch(window, touch);
-                } else {
-                    GTCancelInspectorTouch(window, nil);
-                }
-                break;
-            }
-
-            case UITouchPhaseMoved: {
-                UITouch *tracked =
-                    objc_getAssociatedObject(
-                        window,
-                        &GTInspectorTrackedTouchKey
-                    );
-
-                NSValue *startValue =
-                    objc_getAssociatedObject(
-                        window,
-                        &GTInspectorStartPointKey
-                    );
-
-                if (tracked == touch && startValue) {
-                    CGPoint originalPoint = startValue.CGPointValue;
-                    CGPoint currentPoint = [touch locationInView:window];
-
-                    CGFloat dx = currentPoint.x - originalPoint.x;
-                    CGFloat dy = currentPoint.y - originalPoint.y;
-
-                    if ((dx * dx + dy * dy) > (18.0 * 18.0)) {
-                        GTCancelInspectorTouch(window, touch);
-                    }
-                }
-
-                break;
-            }
-
-            case UITouchPhaseEnded:
-            case UITouchPhaseCancelled:
-                GTCancelInspectorTouch(window, touch);
-                break;
-
-            default:
-                break;
-        }
-    }
 }
 
 @interface GTInspectorOverlayWindow : UIWindow
@@ -2334,68 +2137,6 @@ static void GTRefreshKnownWindows(void) {
 
 %end
 
-#pragma mark - Exact UIApplication subclass event hook
-
-static IMP GTOriginalSendEventIMP = NULL;
-static Class GTHookedApplicationClass = Nil;
-
-static void GTInspectorSendEventReplacement(id self, SEL _cmd, UIEvent *event) {
-    GTProcessInspectorEvent(event);
-
-    if (GTOriginalSendEventIMP) {
-        ((void (*)(id, SEL, UIEvent *))GTOriginalSendEventIMP)(
-            self,
-            _cmd,
-            event
-        );
-    }
-}
-
-static void GTInstallExactApplicationEventHook(void) {
-    UIApplication *application = UIApplication.sharedApplication;
-
-    if (!application) {
-        return;
-    }
-
-    Class actualClass = object_getClass(application);
-
-    if (!actualClass ||
-        actualClass == GTHookedApplicationClass) {
-        return;
-    }
-
-    SEL selector = @selector(sendEvent:);
-
-    // class_getInstanceMethod walks the superclass chain, so this also works
-    // when the private UIApplication subclass merely inherits sendEvent:.
-    Method method = class_getInstanceMethod(actualClass, selector);
-
-    if (!method) {
-        return;
-    }
-
-    const char *types = method_getTypeEncoding(method);
-    IMP replacement = (IMP)GTInspectorSendEventReplacement;
-
-    // If sendEvent: is inherited, first add an override to the exact runtime
-    // UIApplication subclass. This avoids changing UIApplication globally.
-    if (class_addMethod(actualClass, selector, replacement, types)) {
-        GTOriginalSendEventIMP = method_getImplementation(method);
-    } else {
-        Method ownMethod = class_getInstanceMethod(actualClass, selector);
-
-        if (!ownMethod) {
-            return;
-        }
-
-        GTOriginalSendEventIMP =
-            method_setImplementation(ownMethod, replacement);
-    }
-
-    GTHookedApplicationClass = actualClass;
-}
-
 #pragma mark - Preferences
 
 static NSString * const GTPrefsFilePath =
@@ -2652,8 +2393,8 @@ static void GTRegisterPreferences(void) {
             return;
         }
 
-        // V0.2.18 uses the broad com.apple.Security Substrate filter so
-        // Relaxin's App List decides which processes are injected. Refuse to
+        // The broad com.apple.Security Substrate filter lets
+        // Relaxin's App List decide which processes are injected. Refuse to
         // initialize GlobalTint in non-UIKit daemon/tool processes.
         Class applicationClass = objc_getClass("UIApplication");
 
@@ -2667,14 +2408,11 @@ static void GTRegisterPreferences(void) {
         // A custom Logos constructor is used, so initialize hooks explicitly.
         %init;
 
-        // App Store / Safari may use private UIApplication subclasses that
-        // override sendEvent:. Hook the exact runtime class on the main queue.
+        // The optional UI inspector is implemented with its own
+        // pass-through UIWindowScene overlay. Keep it synchronized with app
+        // and window lifecycle events without modifying UIApplication event
+        // dispatch.
         dispatch_async(dispatch_get_main_queue(), ^{
-            GTInstallExactApplicationEventHook();
-
-            // Do not wait for a UIWindow hook to fire. Proactively enumerate
-            // all scenes/windows and keep the inspector synchronized with
-            // application/window lifecycle events.
             GTInstallInspectorLifecycleObservers();
             GTScheduleInspectorRefreshes();
         });
