@@ -194,7 +194,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     PSSpecifier *general =
         [PSSpecifier groupSpecifierWithName:@"全局设置"];
     [general setProperty:
-        @"V0.4.6：新增底部标签栏通知角标颜色，并加入当前配置的本地备份与一键恢复功能。"
+        @"V0.4.7：加入多层蓝色改色增强，可继续拦截普通改色漏掉的动态系统蓝、背景色与图层颜色；0.4.6 的通知角标和配置备份功能全部保留。"
         forKey:@"footerText"];
     [items addObject:general];
 
@@ -428,7 +428,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
 
     [items addObject:
-        [self switchSpecifierWithName:@"强制替换已解析蓝色"
+        [self switchSpecifierWithName:@"多层蓝色改色增强"
                                   key:@"ForceResolvedBlue"
                          defaultValue:NO]];
 
@@ -440,7 +440,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
 
     PSSpecifier *debugHelp = [PSSpecifier emptyGroupSpecifier];
     [debugHelp setProperty:
-        @"“注入测试边框”只用于确认 GlobalTint 是否已在当前应用中运行，测试后建议关闭。“强制替换已解析蓝色”用于少数仍固定使用系统蓝色的界面元素。开启“界面元素检查器”后，应用右上角会显示紫色 GT；点 GT，再点要检查的位置，即可生成界面层级与颜色报告并自动复制到剪贴板。"
+        @"“注入测试边框”只用于确认 GlobalTint 是否已在当前应用中运行，测试后建议关闭。“多层蓝色改色增强”会从颜色生成、动态颜色解析、文字/强调色/背景色到图层 CGColor 多层拦截接近系统蓝色的颜色；普通改色仍有漏网元素时再开启。若个别 App 显示异常，可暂时关闭此项或把该 App 加入排除列表。开启“界面元素检查器”后，应用右上角会显示紫色 GT；点 GT，再点要检查的位置，即可生成界面层级与颜色报告并自动复制到剪贴板。"
         forKey:@"footerText"];
     [items addObject:debugHelp];
 
@@ -757,7 +757,7 @@ static NSString *GTHexStringFromColor(UIColor *color) {
     // Reset
     PSSpecifier *resetGroup = [PSSpecifier emptyGroupSpecifier];
     [resetGroup setProperty:
-        @"V0.4.6 继续保持 V0.4.2 的安全隔离架构：GlobalTint 只在普通应用中运行，不注入 SpringBoard。通知角标属于普通 App 的底部标签栏功能，不涉及系统桌面。"
+        @"V0.4.7 继续保持 V0.4.2 的安全隔离架构：GlobalTint 只在普通应用中运行，不注入 SpringBoard。多层改色增强同样只在普通 App 内生效。"
         forKey:@"footerText"];
     [items addObject:resetGroup];
 
@@ -2422,7 +2422,7 @@ appComponentSwitchOverrides {
         [prefs setObject:[NSDate date]
                   forKey:@"SavedConfigurationDate"];
 
-        [prefs setObject:@"0.4.6"
+        [prefs setObject:@"0.4.7"
                   forKey:@"SavedConfigurationVersion"];
 
         [weakSelf reloadSpecifiers];
