@@ -1,5 +1,19 @@
 # GlobalTint Changelog
 
+## 0.2.17
+
+- Changed the MobileSubstrate injection filter after testing showed that
+  ordinary App Store apps could load other tweaks but did not load GlobalTint.
+- Added a `Classes` filter for `UIApplication`, so UIKit/SwiftUI application
+  processes can match by the Objective-C application class instead of relying
+  only on the legacy `com.apple.UIKit` bundle filter.
+- Added explicit bundle matches for:
+  - `com.apple.AppStore`
+  - `com.apple.mobilesafari`
+  - `com.apple.Preferences`
+  - `com.apple.springboard`
+- Kept `com.apple.UIKit` for compatibility with traditional Substrate loaders.
+
 ## 0.2.16
 
 - Fixed the scene-overlay inspector only appearing in Settings.
