@@ -1154,7 +1154,9 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
             [self buildSpecifiers];
     }
 
- 
+    return _specifiers;
+}
+
 #pragma mark - App header cell
 
 - (PSSpecifier *)gtSpecifierAtIndexPath:
@@ -1214,9 +1216,6 @@ static NSString *GTDetailHexFromColor(UIColor *color) {
         UITableViewCellAccessoryNone;
 
     return cell;
-}
-
-   return _specifiers;
 }
 
 @end
