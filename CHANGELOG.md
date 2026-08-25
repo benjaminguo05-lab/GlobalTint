@@ -1,5 +1,17 @@
 # GlobalTint Changelog
 
+## 0.4.5
+
+- Fixed a localization regression introduced while translating V0.4.3/V0.4.4.
+- Per-App component-switch INTERNAL keys are restored to the exact identifiers
+  expected by the runtime:
+  `Window`, `Switch`, `Slider`, `Progress`, `Segmented`, `PageControl`,
+  `RefreshControl`, `NavigationBar`, `TabBar`, `Toolbar`, `SearchBar`.
+- User-facing labels remain fully Chinese.
+- Finished Chinese localization in the App detail page.
+- No changes to tweak color logic, libSandy preferences, Loader/Core split, or
+  hard SpringBoard quarantine.
+
 ## 0.4.4
 
 - Further localized the main Settings page and manual configuration dialogs.

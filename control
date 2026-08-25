@@ -1,8 +1,8 @@
 Package: com.benja.globaltint
 Name: Global Tint
-Version: 0.4.4
+Version: 0.4.5
 Architecture: iphoneos-arm64e
-Description: Stable app-only GlobalTint with hard SpringBoard quarantine and fully localized Chinese Settings UI.
+Description: Stable app-only GlobalTint with hard SpringBoard quarantine, fully localized Chinese UI, and corrected per-app switch keys.
 Maintainer: Benja
 Author: Benja
 Section: Tweaks

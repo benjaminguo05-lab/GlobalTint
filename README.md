@@ -313,3 +313,10 @@ and the V0.4.2 hard SpringBoard quarantine are unchanged.
 The main Settings page and manual configuration dialogs are now localized with
 plain Chinese names that describe the actual UI area being changed. Technical
 preference keys and the V0.4.2 hard SpringBoard quarantine remain unchanged.
+
+
+## V0.4.5
+
+Localization hotfix. Per-App component switch identifiers remain internal
+English keys while all user-facing names stay Chinese. App detail wording is
+also fully localized. Runtime and SpringBoard quarantine are unchanged.
