@@ -299,3 +299,10 @@ an impossible substrate filter and is manually loaded only when the current
 executable is a full `.app`, is not an `.appex`, and is not SpringBoard.
 System UI support is intentionally disabled while this app-only architecture
 is validated.
+
+
+## V0.4.3
+
+Settings terminology cleanup. UIKit class names are replaced with user-friendly
+Chinese descriptions of the actual UI area being recolored. Runtime behavior
+and the V0.4.2 hard SpringBoard quarantine are unchanged.

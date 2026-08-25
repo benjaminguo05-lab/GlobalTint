@@ -1,8 +1,8 @@
 Package: com.benja.globaltint
 Name: Global Tint
-Version: 0.4.2
+Version: 0.4.3
 Architecture: iphoneos-arm64e
-Description: Stable app-only GlobalTint with a hard SpringBoard quarantine loader for RootHide/Relaxin.
+Description: Stable app-only GlobalTint with hard SpringBoard quarantine and user-friendly Chinese interface labels.
 Maintainer: Benja
 Author: Benja
 Section: Tweaks

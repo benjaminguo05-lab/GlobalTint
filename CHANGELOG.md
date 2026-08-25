@@ -1,5 +1,25 @@
 # GlobalTint Changelog
 
+## 0.4.3
+
+- User-facing terminology cleanup only; no runtime tint logic changes.
+- Replaced UIKit class names in Settings with plain Chinese descriptions:
+  - Window -> 应用整体强调色
+  - UISwitch -> 开关按钮
+  - UISlider -> 滑动条 / 音量进度条
+  - UIProgressView -> 进度条
+  - UISegmentedControl -> 分段选择按钮
+  - UIPageControl -> 页面圆点指示器
+  - UIRefreshControl -> 下拉刷新指示器
+  - UINavigationBar -> 顶部导航栏
+  - UITabBar -> 底部标签栏
+  - UIToolbar -> 工具栏
+  - UISearchBar -> 搜索栏
+- Renamed “组件” wording to the more understandable “界面” in App profile
+  sections.
+- Kept all preference keys, dictionaries, color precedence, loader/core split,
+  and SpringBoard quarantine unchanged from V0.4.2.
+
 ## 0.4.2
 
 - Rebuilt GlobalTint around a hard SpringBoard quarantine.
