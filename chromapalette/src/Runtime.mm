@@ -296,7 +296,13 @@ static void ReconcileWindows(void) {
     reconcileViews=[NSMutableArray array]; reconcileVisited=0;
     for (UIScene *scene in UIApplication.sharedApplication.connectedScenes)
         if ([scene isKindOfClass:UIWindowScene.class]) [reconcileViews addObjectsFromArray:((UIWindowScene *)scene).windows];
-    if (!reconcileViews.count) [reconcileViews addObjectsFromArray:UIApplication.sharedApplication.windows];
+    // Older jailbreak apps may not adopt scenes. Query their legacy window list
+    // through the checked runtime accessor instead of a deprecated SDK declaration.
+    if (!reconcileViews.count) {
+        id legacy=CPGetObject(UIApplication.sharedApplication,@"windows");
+        if ([legacy isKindOfClass:NSArray.class])
+            for (id window in legacy) if ([window isKindOfClass:UIWindow.class]) [reconcileViews addObject:window];
+    }
     // Iterative, bounded, and split across main-queue turns. No perpetual timer.
     dispatch_async(dispatch_get_main_queue(), ^{ ReconcileBatch(); });
 }
