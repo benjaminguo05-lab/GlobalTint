@@ -75,7 +75,7 @@
                 if ([self.configuration[@"roles"][key][@"enabled"] boolValue]) ++enabled;
             }
             cell.detailTextLabel.text=[self.configuration[@"groups"][g[@"key"]] boolValue] ?
-                [NSString stringWithFormat:@"已开启 · %lu/%lu 项颜色生效",(unsigned long)enabled,(unsigned long)[g[@"roles"] count]] : @"已关闭 · 点击设置颜色";
+                [NSString stringWithFormat:@"已开启 · %lu/%lu 项颜色已启用",(unsigned long)enabled,(unsigned long)[g[@"roles"] count]] : @"已关闭 · 点击设置颜色";
             cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
         } else {
             cell.textLabel.text=@[@"不改色的应用",@"控件预览",@"关闭并恢复默认设置",@"配置读取诊断"][path.row];
