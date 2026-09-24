@@ -10,6 +10,10 @@ FOUNDATION_EXPORT UIColor *CPColor(NSString *group, NSString *role, UIView *view
 FOUNDATION_EXPORT BOOL CPGroupEnabled(NSString *group, UIView *view);
 FOUNDATION_EXPORT BOOL CPIsSettingsView(UIView *view);
 FOUNDATION_EXPORT void CPApplyColor(id object, NSString *property, UIColor *color);
+FOUNDATION_EXPORT void CPApplyImageColor(UIImageView *view, UIColor *color);
+FOUNDATION_EXPORT void CPApplySymbolColor(UIImageView *view, UIColor *color);
+FOUNDATION_EXPORT void CPRegisterColorGetter(NSString *className, NSString *selector, NSString *group, NSString *role);
+FOUNDATION_EXPORT void CPRegisterTabColorGetter(NSString *selector);
 FOUNDATION_EXPORT void CPTransform(id object, NSString *property, BOOL enabled, id (^transform)(id source));
 FOUNDATION_EXPORT id CPGetObject(id object, NSString *property);
 FOUNDATION_EXPORT id CPGetIvar(id object, const char *name);

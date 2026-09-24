@@ -9,6 +9,15 @@ static inline void CPPropertySourceChanged(NSMutableDictionary *record, id value
     record[@"source"] = CPBoxValue(value);
     record[@"dirty"] = @YES;
 }
+// Only call for value-semantic colors or immutable images, never copy-on-get appearances.
+static inline void CPPropertyConcreteInput(NSMutableDictionary *record, id current, id context) {
+    if (!record) return;
+    CPPropertySourceChanged(record, current);
+    if (!CPSameValue(record[@"context"], CPBoxValue(context))) {
+        record[@"context"] = CPBoxValue(context);
+        record[@"dirty"] = @YES;
+    }
+}
 
 // Returns YES only when a repeated host/plugin conflict trips the circuit breaker.
 static inline BOOL CPUpdateProperty(NSMutableDictionary *records, NSString *property,

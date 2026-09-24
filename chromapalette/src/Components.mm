@@ -1,4 +1,5 @@
 #import "Runtime.h"
+static void NotesSymbols(UIView *cell);
 
 static NSMutableDictionary *TextAttributes(NSDictionary *source, UIColor *color) {
     NSMutableDictionary *out=source ? [source mutableCopy] : [NSMutableDictionary dictionary];
@@ -75,22 +76,60 @@ static void Cell(UITableViewCell *cell) {
     CPTransform(cell,@"selectedBackgroundView",selected != nil,^id(id source) {
         UIView *v=[[UIView alloc] initWithFrame:cell.bounds]; v.backgroundColor=selected; return v;
     });
+    UIColor *icon=CPColor(@"cell",@"icon",cell);
     id content=cell.contentConfiguration;
     if (!content || [content isKindOfClass:UIListContentConfiguration.class]) {
-        CPTransform(cell,@"contentConfiguration",(text || detail) && content != nil,^id(id source) {
+        CPTransform(cell,@"contentConfiguration",(text || detail || icon) && content != nil,^id(id source) {
             if (![source isKindOfClass:UIListContentConfiguration.class]) return source;
             UIListContentConfiguration *a=[source copy];
             if (text) { a.textProperties.color=text; a.textProperties.colorTransformer=nil; }
             if (detail) { a.secondaryTextProperties.color=detail; a.secondaryTextProperties.colorTransformer=nil; }
+            if (icon) { a.imageProperties.tintColor=icon; a.imageProperties.tintColorTransformer=nil; }
             return a;
         });
         if (!content) {
             CPApplyColor(cell.textLabel,@"textColor",text);
             CPApplyColor(cell.detailTextLabel,@"textColor",detail);
+            CPApplyColor(cell.imageView,@"tintColor",icon);
+            // Preserve photos and arbitrary raster artwork in ordinary list cells.
+            CPApplySymbolColor(cell.imageView,icon);
         }
+    }
+    if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"]) NotesSymbols(cell);
+}
+static void CollectionCell(UICollectionViewListCell *cell) {
+    UIColor *icon=CPColor(@"cell",@"icon",cell), *text=CPColor(@"cell",@"text",cell), *detail=CPColor(@"cell",@"detail",cell);
+    CPApplyColor(cell,@"tintColor",CPColor(@"cell",@"accessory",cell));
+    CPTransform(cell,@"contentConfiguration",icon || text || detail,^id(id source) {
+        if (![source isKindOfClass:UIListContentConfiguration.class]) return source;
+        UIListContentConfiguration *a=[source copy];
+        if (icon) { a.imageProperties.tintColor=icon; a.imageProperties.tintColorTransformer=nil; }
+        if (text) { a.textProperties.color=text; a.textProperties.colorTransformer=nil; }
+        if (detail) { a.secondaryTextProperties.color=detail; a.secondaryTextProperties.colorTransformer=nil; }
+        return a;
+    });
+    if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"]) NotesSymbols(cell);
+}
+static void NotesSymbols(UIView *cell) {
+    // Notes uses collection cells and hierarchical symbols instead of UITableViewCell.imageView.
+    // Bound the walk to this cell. Never inspect or modify note text/attachment data.
+    NSMutableArray<UIView *> *pending=[NSMutableArray arrayWithArray:cell.subviews];
+    UIColor *color=CPColor(@"cell",@"icon",cell);
+    for (NSUInteger visited=0; pending.count && visited<64; ++visited) {
+        UIView *view=pending.lastObject; [pending removeLastObject];
+        if ([view isKindOfClass:UIImageView.class]) {
+            UIImageView *icon=(UIImageView *)view;
+            CPApplySymbolColor(icon,color);
+        }
+        if (![view isKindOfClass:UICollectionViewCell.class] && ![view isKindOfClass:UITableViewCell.class])
+            [pending addObjectsFromArray:view.subviews];
     }
 }
 void CPInstallComponents(void) {
+    for (NSString *selector in @[@"_buttonTintColorForState:",@"_contentTintColorForState:",@"iconColorForState:",@"defaultColorForState:"])
+        CPRegisterTabColorGetter(selector);
+    CPRegisterColorGetter(@"UISwitchModernVisualElement",@"_effectiveOnTintColor",@"switch",@"on");
+    CPRegisterColorGetter(@"UISwitchModernVisualElement",@"_effectiveTintColor",@"switch",@"off");
     CPTrackProperties(@"UINavigationItem",@[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"]);
     CPTrackProperties(@"UITabBarItem",@[@"standardAppearance",@"scrollEdgeAppearance"]);
     CPTrackProperties(@"UIBarButtonItem",@[@"tintColor"]);
@@ -102,6 +141,11 @@ void CPInstallComponents(void) {
         CPApplyColor(v,@"separatorColor",CPColor(@"table",@"separator",v));
     });
     CPRegisterView(@"UITableViewCell",@[@"backgroundColor",@"tintColor",@"selectedBackgroundView",@"backgroundConfiguration",@"contentConfiguration"],^(UIView *v) { Cell((UITableViewCell *)v); });
+    CPRegisterView(@"UICollectionViewListCell",@[@"tintColor",@"contentConfiguration"],^(UIView *v) { CollectionCell((UICollectionViewListCell *)v); });
+    if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"])
+        CPRegisterView(@"UICollectionViewCell",@[],^(UIView *v) { NotesSymbols(v); });
+    if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.MobileSMS"])
+        CPRegisterView(@"CKNavigationBar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance"],^(UIView *v) { Navigation((UINavigationBar *)v); });
     CPRegisterView(@"UISwitch",@[@"onTintColor",@"tintColor",@"backgroundColor",@"thumbTintColor"],^(UIView *v) {
         CPApplyColor(v,@"onTintColor",CPColor(@"switch",@"on",v));
         CPApplyColor(v,@"thumbTintColor",CPColor(@"switch",@"thumb",v));

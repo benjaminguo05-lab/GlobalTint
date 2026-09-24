@@ -67,7 +67,58 @@ void CPTransform(id object, NSString *property, BOOL enabled, id (^transform)(id
     if (blocked) os_log(OS_LOG_DEFAULT,"[ChromaPalette] paused repeated updates: %{public}@.%{public}@",NSStringFromClass([object class]),property);
 }
 void CPApplyColor(id object, NSString *property, UIColor *color) {
+    if (!object || !NSThread.isMainThread) return;
+    // UIKit can reassign a concrete color during layout. Its value is comparable;
+    // unlike appearance copies this cannot invalidate merely due to a new identity.
+    CPPropertyConcreteInput(Records(object,NO)[property], CPGetObject(object,property), color);
     CPTransform(object, property, color != nil, ^id(id source) { return color; });
+}
+void CPApplyImageColor(UIImageView *view, UIColor *color) {
+    if (![view isKindOfClass:UIImageView.class] || !NSThread.isMainThread) return;
+    CPPropertyConcreteInput(Records(view,NO)[@"image"], view.image, color);
+    CPTransform(view,@"image",color != nil,^id(id source) {
+        return [source isKindOfClass:UIImage.class] ? [source imageWithTintColor:color renderingMode:UIImageRenderingModeAlwaysOriginal] : source;
+    });
+}
+void CPApplySymbolColor(UIImageView *view, UIColor *color) {
+    if (![view isKindOfClass:UIImageView.class] || !NSThread.isMainThread) return;
+    // Reuse can replace a symbol with a photo; release the old transform without tinting it.
+    CPPropertySourceChanged(Records(view,NO)[@"image"],view.image);
+    id original=CPUnboxValue(Records(view,NO)[@"image"][@"source"]);
+    if (view.image.isSymbolImage || ([original isKindOfClass:UIImage.class] && [original isSymbolImage]))
+        CPApplyImageColor(view,color);
+    else CPApplyImageColor(view,nil);
+}
+// Read-side overrides do not write properties or request layout. Unsupported ABI is skipped.
+void CPRegisterColorGetter(NSString *className, NSString *selector, NSString *group, NSString *role) {
+    Class cls=NSClassFromString(className); SEL sel=NSSelectorFromString(selector);
+    NSString *key=[NSString stringWithFormat:@"getter:%@.%@",className,selector];
+    if ([trackedSetters containsObject:key]) return;
+    if (!CPObjectMethod(cls,sel,0)) { CPRecordCapability(key,NO); return; }
+    [trackedSetters addObject:key];
+    __block IMP original=NULL;
+    IMP hook=imp_implementationWithBlock(^id(id object) {
+        id source=((id (*)(id,SEL))original)(object,sel);
+        if (!NSThread.isMainThread) return source;
+        UIView *view=[object isKindOfClass:UIView.class] ? object : nil;
+        return CPColor(group,role,view) ?: source;
+    });
+    MSHookMessageEx(cls,sel,hook,&original); CPRecordCapability(key,YES);
+}
+void CPRegisterTabColorGetter(NSString *selector) {
+    Class cls=NSClassFromString(@"UITabBarButton"); SEL sel=NSSelectorFromString(selector);
+    NSString *key=[@"tab-state:" stringByAppendingString:selector];
+    if ([trackedSetters containsObject:key]) return;
+    Method m=class_getInstanceMethod(cls,sel);
+    if (!m || method_getNumberOfArguments(m)!=3 || !TypeStarts(m,YES,0,'@') ||
+        !(TypeStarts(m,NO,2,'Q') || TypeStarts(m,NO,2,'q'))) { CPRecordCapability(key,NO); return; }
+    [trackedSetters addObject:key]; __block IMP original=NULL;
+    IMP hook=imp_implementationWithBlock(^id(UIView *view,NSUInteger state) {
+        id source=((id (*)(id,SEL,NSUInteger))original)(view,sel,state);
+        if (!NSThread.isMainThread) return source;
+        return CPColor(@"tabbar",(state & UIControlStateSelected) ? @"selected" : @"normal",view) ?: source;
+    });
+    MSHookMessageEx(cls,sel,hook,&original); CPRecordCapability(key,YES);
 }
 BOOL CPIsSettingsView(UIView *view) {
     UIResponder *r = view;

@@ -36,9 +36,18 @@ static void ControlCenter(void) {
             if (overlay.hidden!=!color) overlay.hidden=!color;
         }
     });
-    CPRegisterView(@"CCUIRoundButton",@[@"highlightColor"],^(UIView *v) {
-        CPApplyColor(v,@"highlightColor",CPColor(@"controlcenter",@"active",v));
-    });
+    for (NSString *name in @[@"CCUIRoundButton",@"CCUIConnectivityButtonView"]) {
+        CPRegisterColorGetter(name,@"highlightColor",@"controlcenter",@"active");
+        CPRegisterView(name,@[],^(UIView *v) {
+            UIColor *active=CPColor(@"controlcenter",@"active",v);
+            for (NSString *property in @[@"selectedStateBackgroundView",@"alternateSelectedStateBackgroundView"]) {
+                id background=CPGetObject(v,property);
+                if ([background isKindOfClass:UIView.class]) CPApplyColor(background,@"backgroundColor",active);
+            }
+            id glyph=CPGetObject(v,@"selectedGlyphView");
+            if ([glyph isKindOfClass:UIImageView.class]) CPApplyImageColor(glyph,CPColor(@"controlcenter",@"selectedGlyph",v));
+        });
+    }
     CPRegisterView(@"CCUIButtonModuleView",@[@"glyphColor",@"selectedGlyphColor"],^(UIView *v) {
         CPApplyColor(v,@"glyphColor",CPColor(@"controlcenter",@"glyph",v));
         CPApplyColor(v,@"selectedGlyphColor",CPColor(@"controlcenter",@"selectedGlyph",v));
@@ -128,5 +137,19 @@ static void Keyboard(void) {
 void CPInstallPrivate(BOOL systemProcess) {
     Status();
     if (systemProcess) ControlCenter();
-    else Keyboard();
+    else {
+        Keyboard();
+        if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.MobileSMS"]) {
+            CPRegisterView(@"UIWindow",@[@"tintColor"],^(UIView *v) {
+                CPApplyColor(v,@"tintColor",CPColor(@"messages",@"accent",v));
+            });
+            // ChatKit provides its own semantic colors; do not replace global UIColor blue.
+            for (NSString *selector in @[@"appTintColor",@"darkAppTintColor",@"entryFieldButtonColor",@"entryFieldDarkStyleButtonColor",@"segmentedControlSelectionTintColor"])
+                CPRegisterColorGetter(@"CKUITheme",selector,@"messages",@"accent");
+            CPRegisterView(@"CKConversationListStandardCell",@[],^(UIView *v) {
+                id image=CPGetIvar(v,"_unreadIndicatorImageView");
+                if ([image isKindOfClass:UIImageView.class]) CPApplyImageColor(image,CPColor(@"messages",@"unread",v));
+            });
+        }
+    }
 }
