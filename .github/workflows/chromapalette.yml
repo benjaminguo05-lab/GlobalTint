@@ -59,7 +59,7 @@ jobs:
           python3 tests/check_project.py --deb packages/*.deb
           for binary in .theos/_/Library/MobileSubstrate/DynamicLibraries/*.dylib .theos/_/Library/PreferenceBundles/ChromaPrefs.bundle/ChromaPrefs; do
             test -f "$binary"
-            xcrun lipo -verify_arch arm64 arm64e "$binary"
+            xcrun lipo "$binary" -verify_arch arm64 arm64e
             xcrun otool -L "$binary"
           done
           shasum -a 256 packages/*.deb > packages/SHA256SUMS.txt
