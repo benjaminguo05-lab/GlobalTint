@@ -1,0 +1,80 @@
+name: Build Chroma Palette
+
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - 'chromapalette/**'
+      - '.github/workflows/chromapalette.yml'
+  pull_request:
+    paths:
+      - 'chromapalette/**'
+      - '.github/workflows/chromapalette.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: chromapalette-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: chromapalette
+        shell: bash
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+      - name: Check project structure
+        run: python3 tests/check_project.py
+      - name: Install RootHide Theos
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          export THEOS="$HOME/theos"
+          export THEOS_INSTALL_NO_CANCEL=1
+          curl --retry 3 --retry-delay 3 -fsSL \
+            https://raw.githubusercontent.com/roothide/theos/88506b2c22e9e07dd4ed055f23c9e398a117a2c7/bin/install-theos \
+            -o "$RUNNER_TEMP/install-theos"
+          bash "$RUNNER_TEMP/install-theos"
+          echo "THEOS=$THEOS" >> "$GITHUB_ENV"
+          if ! find "$THEOS/sdks" -maxdepth 1 -name 'iPhoneOS*.sdk' | grep -q .; then
+            "$THEOS/bin/install-sdk" latest
+          fi
+      - name: Build native RootHide package
+        run: |
+          set -euo pipefail
+          xcodebuild -version
+          git -C "$THEOS" rev-parse HEAD
+          make clean
+          make package FINALPACKAGE=1 2>&1 | tee build.log
+      - name: Verify package and binaries
+        run: |
+          set -euo pipefail
+          python3 tests/check_project.py --deb packages/*.deb
+          for binary in .theos/_/Library/MobileSubstrate/DynamicLibraries/*.dylib .theos/_/Library/PreferenceBundles/ChromaPrefs.bundle/ChromaPrefs; do
+            test -f "$binary"
+            xcrun lipo -verify_arch arm64 arm64e "$binary"
+            xcrun otool -L "$binary"
+          done
+          shasum -a 256 packages/*.deb > packages/SHA256SUMS.txt
+      - name: Upload installable package
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChromaPalette-RootHide-${{ github.run_number }}
+          path: |
+            chromapalette/packages/*.deb
+            chromapalette/packages/SHA256SUMS.txt
+          if-no-files-found: error
+      - name: Upload compiler log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ChromaPalette-build-log-${{ github.run_number }}
+          path: chromapalette/build.log
+          if-no-files-found: ignore
