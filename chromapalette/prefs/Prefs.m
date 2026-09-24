@@ -141,7 +141,13 @@
 }
 - (void)diagnostics {
     NSDictionary *disk=CPReadConfiguration();
-    NSString *message=[NSString stringWithFormat:@"版本：0.1.3\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSString *message=[NSString stringWithFormat:@"版本：0.1.4\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSDictionary *status=CPIcleanerStatus();
+    if (status) {
+        NSDateFormatter *format=[[NSDateFormatter alloc] init]; format.dateStyle=NSDateFormatterShortStyle; format.timeStyle=NSDateFormatterMediumStyle;
+        NSString *time=[status[@"date"] isKindOfClass:NSDate.class] ? [format stringFromDate:status[@"date"]] : @"未知";
+        message=[message stringByAppendingFormat:@"\n\niCleaner 最近记录：%@\n插件版本：%@\n应用：%@\nUID：%@；libSandy：%@\n配置可读：%@；总开关：%@；被排除：%@\n请先重开 iCleaner，再检查时间是否更新。旧记录不能证明本次已加载。",time,status[@"version"],status[@"bundle"],status[@"uid"],status[@"libSandy"],[status[@"readable"] boolValue]?@"是":@"否",[status[@"enabled"] boolValue]?@"开":@"关",[status[@"excluded"] boolValue]?@"是":@"否"];
+    } else message=[message stringByAppendingString:@"\n\niCleaner：尚无加载记录。请先打开 iCleaner，再返回此页检查；无记录也可能是记录文件无法写入。"];
     UIAlertController *a=[UIAlertController alertControllerWithTitle:@"配置读取诊断" message:message preferredStyle:UIAlertControllerStyleAlert];
     [a addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:a animated:YES completion:nil];
 }
