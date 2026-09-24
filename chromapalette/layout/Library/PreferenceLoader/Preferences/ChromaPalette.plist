@@ -14,6 +14,8 @@
 		<true/>
 		<key>label</key>
 		<string>Chroma Palette</string>
+		<key>icon</key>
+		<string>Spectrum.png</string>
 	</dict>
 </dict>
 </plist>
