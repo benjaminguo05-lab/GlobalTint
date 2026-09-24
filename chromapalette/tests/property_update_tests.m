@@ -1,4 +1,5 @@
 #import "../src/PropertyUpdate.h"
+#import "../src/AttributedColors.h"
 #include <assert.h>
 #include <stdio.h>
 
@@ -16,6 +17,21 @@ static CopyValue *Value(NSInteger number) {
 }
 int main(void) {
     @autoreleasepool {
+        NSMutableAttributedString *rich=[[NSMutableAttributedString alloc] initWithString:@"action danger white"];
+        [rich addAttributes:@{@"foreground":@"blue",@"underline":@"blue",@"link":@"test://original",@"font":@"unchanged"} range:NSMakeRange(0,6)];
+        [rich addAttribute:@"foreground" value:@"red" range:NSMakeRange(7,6)];
+        [rich addAttribute:@"foreground" value:@"white" range:NSMakeRange(14,5)];
+        NSAttributedString *mapped=CPMapAttributedColors(rich,@[@"foreground",@"underline"],^id(id value) { return [value isEqual:@"blue"] ? @"green" : value; });
+        assert([mapped.string isEqual:rich.string]);
+        assert([[mapped attribute:@"foreground" atIndex:0 effectiveRange:NULL] isEqual:@"green"]);
+        assert([[mapped attribute:@"underline" atIndex:0 effectiveRange:NULL] isEqual:@"green"]);
+        assert([[mapped attribute:@"link" atIndex:0 effectiveRange:NULL] isEqual:@"test://original"]);
+        assert([[mapped attribute:@"font" atIndex:0 effectiveRange:NULL] isEqual:@"unchanged"]);
+        assert([[mapped attribute:@"foreground" atIndex:7 effectiveRange:NULL] isEqual:@"red"]);
+        assert([[mapped attribute:@"foreground" atIndex:14 effectiveRange:NULL] isEqual:@"white"]);
+        assert([[rich attribute:@"foreground" atIndex:0 effectiveRange:NULL] isEqual:@"blue"]);
+        assert(CPMapAttributedColors(mapped,@[@"foreground"],^id(id value) { return value; })==mapped);
+        assert(CPMapAttributedColors(nil,@[@"foreground"],^id(id value) { return value; })==nil);
         NSMutableDictionary *records=[NSMutableDictionary dictionary];
         __block CopyValue *stored=Value(10);
         __block NSUInteger writes=0, transforms=0;

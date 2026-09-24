@@ -40,10 +40,12 @@ def check_sources():
         assert role in groups.get(group, set()), (group, role)
     assert {'navigation','toolbar','table','cell','switch','slider','status','controlcenter'} <= groups.keys()
     assert 'keyboard' not in groups
+    assert groups['accent'] == {'foreground','symbol','filled','link'}
+    assert 'index' in groups['table']
     assert groups['switch'] == {'on','off'}
     assert groups['status'] == {'battery'}
     assert groups['controlcenter'] == {'active','selectedGlyph'}
-    assert 'editHex' not in prefs and '输入 HEX' not in prefs
+    assert 'editHex' not in prefs and '杈撳叆 HEX' not in prefs
     assert not re.search(r'UIKB|UIKeyboard', (ROOT / 'src/Private.mm').read_text())
     print(f'Project contracts OK: {len(groups)} component groups, {sum(map(len, groups.values()))} color roles.')
 
