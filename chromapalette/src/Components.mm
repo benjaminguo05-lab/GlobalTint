@@ -1,5 +1,15 @@
 #import "Runtime.h"
 static void NotesSymbols(UIView *cell);
+static BOOL IsFilza(void) {
+    return [NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"];
+}
+static UIColor *ItemsColor(NSString *group, NSString *role, UIView *view) {
+    if (IsFilza()) {
+        UIColor *accent=CPColor(@"filza",@"accent",view);
+        if (accent) return accent;
+    }
+    return CPColor(group,role,view);
+}
 
 static NSMutableDictionary *TextAttributes(NSDictionary *source, UIColor *color) {
     NSMutableDictionary *out=source ? [source mutableCopy] : [NSMutableDictionary dictionary];
@@ -13,7 +23,7 @@ static UINavigationBarAppearance *NavigationAppearance(UINavigationBarAppearance
     UIColor *title=CPColor(@"navigation",@"title",bar), *large=CPColor(@"navigation",@"largeTitle",bar);
     if (title) a.titleTextAttributes=TextAttributes(a.titleTextAttributes,title);
     if (large) a.largeTitleTextAttributes=TextAttributes(a.largeTitleTextAttributes,large);
-    UIColor *items=CPColor(@"navigation",@"items",bar);
+    UIColor *items=ItemsColor(@"navigation",@"items",bar);
     if (items) for (UIBarButtonItemAppearance *button in @[a.buttonAppearance,a.doneButtonAppearance,a.backButtonAppearance]) {
         button.normal.titleTextAttributes=TextAttributes(button.normal.titleTextAttributes,items);
         button.highlighted.titleTextAttributes=TextAttributes(button.highlighted.titleTextAttributes,[items colorWithAlphaComponent:0.65]);
@@ -21,8 +31,8 @@ static UINavigationBarAppearance *NavigationAppearance(UINavigationBarAppearance
     return a;
 }
 static void Navigation(UINavigationBar *bar) {
-    CPApplyColor(bar,@"tintColor",CPColor(@"navigation",@"items",bar));
-    BOOL active=CPColor(@"navigation",@"background",bar) || CPColor(@"navigation",@"title",bar) || CPColor(@"navigation",@"largeTitle",bar) || CPColor(@"navigation",@"items",bar);
+    CPApplyColor(bar,@"tintColor",ItemsColor(@"navigation",@"items",bar));
+    BOOL active=CPColor(@"navigation",@"background",bar) || CPColor(@"navigation",@"title",bar) || CPColor(@"navigation",@"largeTitle",bar) || ItemsColor(@"navigation",@"items",bar);
     for (NSString *p in @[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"])
         CPTransform(bar,p,active,^id(id source) { return NavigationAppearance(source,bar); });
     // Item appearances have precedence over the bar's appearance on iOS 15+.
@@ -31,7 +41,7 @@ static void Navigation(UINavigationBar *bar) {
             CPTransform(item,p,active,^id(id source) { return NavigationAppearance(source,bar); });
 }
 static void Toolbar(UIToolbar *bar) {
-    UIColor *items=CPColor(@"toolbar",@"items",bar), *bg=CPColor(@"toolbar",@"background",bar);
+    UIColor *items=ItemsColor(@"toolbar",@"items",bar), *bg=CPColor(@"toolbar",@"background",bar);
     CPApplyColor(bar,@"tintColor",items);
     for (UIBarButtonItem *item in bar.items) CPApplyColor(item,@"tintColor",items);
     for (NSString *p in @[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"])
@@ -45,7 +55,7 @@ static void Toolbar(UIToolbar *bar) {
 }
 static UITabBarAppearance *TabAppearance(UITabBarAppearance *source, UITabBar *bar) {
     UITabBarAppearance *a=[source copy] ?: [bar.standardAppearance copy];
-    UIColor *bg=CPColor(@"tabbar",@"background",bar), *selected=CPColor(@"tabbar",@"selected",bar), *normal=CPColor(@"tabbar",@"normal",bar);
+    UIColor *bg=CPColor(@"tabbar",@"background",bar), *selected=ItemsColor(@"tabbar",@"selected",bar), *normal=CPColor(@"tabbar",@"normal",bar);
     if (bg) { a.backgroundColor=bg; a.backgroundImage=nil; a.backgroundEffect=nil; }
     for (UITabBarItemAppearance *i in @[a.stackedLayoutAppearance,a.inlineLayoutAppearance,a.compactInlineLayoutAppearance]) {
         if (selected) { i.selected.iconColor=selected; i.selected.titleTextAttributes=TextAttributes(i.selected.titleTextAttributes,selected); }
@@ -54,9 +64,9 @@ static UITabBarAppearance *TabAppearance(UITabBarAppearance *source, UITabBar *b
     return a;
 }
 static void Tabbar(UITabBar *bar) {
-    CPApplyColor(bar,@"tintColor",CPColor(@"tabbar",@"selected",bar));
+    CPApplyColor(bar,@"tintColor",ItemsColor(@"tabbar",@"selected",bar));
     CPApplyColor(bar,@"unselectedItemTintColor",CPColor(@"tabbar",@"normal",bar));
-    BOOL active=CPColor(@"tabbar",@"background",bar) || CPColor(@"tabbar",@"selected",bar) || CPColor(@"tabbar",@"normal",bar);
+    BOOL active=CPColor(@"tabbar",@"background",bar) || ItemsColor(@"tabbar",@"selected",bar) || CPColor(@"tabbar",@"normal",bar);
     for (NSString *p in @[@"standardAppearance",@"scrollEdgeAppearance"]) {
         CPTransform(bar,p,active,^id(id source) { return TabAppearance(source,bar); });
         for (UITabBarItem *item in bar.items)
@@ -130,6 +140,33 @@ void CPInstallComponents(void) {
         CPRegisterTabColorGetter(selector);
     CPRegisterColorGetter(@"UISwitchModernVisualElement",@"_effectiveOnTintColor",@"switch",@"on");
     CPRegisterColorGetter(@"UISwitchModernVisualElement",@"_effectiveTintColor",@"switch",@"off");
+    if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"]) {
+        CPRegisterView(@"UITextView",@[@"linkTextAttributes",@"tintColor"],^(UIView *v) {
+            UIColor *color=CPColor(@"notes",@"link",v);
+            CPApplyColor(v,@"tintColor",color);
+            CPTransformValue(v,@"linkTextAttributes",color!=nil,color,^id(id source) {
+                NSMutableDictionary *attrs=TextAttributes(source,color);
+                attrs[NSUnderlineColorAttributeName]=color;
+                return attrs;
+            });
+        });
+    }
+    if (IsFilza()) {
+        CPRegisterStateColorGetter(@"UIButton",@"titleColorForState:",@"filza",@"accent",@"accent");
+        CPRegisterView(@"UIWindow",@[@"tintColor"],^(UIView *v) { CPApplyColor(v,@"tintColor",CPColor(@"filza",@"accent",v)); });
+        CPRegisterView(@"UIButton",@[@"tintColor",@"configuration"],^(UIView *v) {
+            UIColor *color=CPColor(@"filza",@"accent",v);
+            UIButton *button=(UIButton *)v;
+            CPApplyColor(button,@"tintColor",color);
+            CPApplyColor(button.titleLabel,@"textColor",color);
+            CPApplySymbolColor(button.imageView,color);
+            CPTransform(button,@"configuration",color!=nil,^id(id source) {
+                UIButtonConfiguration *copy=[source copy];
+                if (copy) copy.baseForegroundColor=color;
+                return copy;
+            });
+        });
+    }
     CPTrackProperties(@"UINavigationItem",@[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"]);
     CPTrackProperties(@"UITabBarItem",@[@"standardAppearance",@"scrollEdgeAppearance"]);
     CPTrackProperties(@"UIBarButtonItem",@[@"tintColor"]);
@@ -146,9 +183,8 @@ void CPInstallComponents(void) {
         CPRegisterView(@"UICollectionViewCell",@[],^(UIView *v) { NotesSymbols(v); });
     if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.MobileSMS"])
         CPRegisterView(@"CKNavigationBar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance"],^(UIView *v) { Navigation((UINavigationBar *)v); });
-    CPRegisterView(@"UISwitch",@[@"onTintColor",@"tintColor",@"backgroundColor",@"thumbTintColor"],^(UIView *v) {
+    CPRegisterView(@"UISwitch",@[@"onTintColor",@"tintColor",@"backgroundColor"],^(UIView *v) {
         CPApplyColor(v,@"onTintColor",CPColor(@"switch",@"on",v));
-        CPApplyColor(v,@"thumbTintColor",CPColor(@"switch",@"thumb",v));
         CPApplyColor(v,@"tintColor",CPColor(@"switch",@"off",v));
         // A separate rounded underlay is used below, so the switch's clipping and layer are untouched.
         static char offLayerKey;

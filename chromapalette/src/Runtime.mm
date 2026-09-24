@@ -6,6 +6,7 @@ static NSDictionary *configuration;
 static NSUInteger revision;
 static BOOL isSystem;
 static NSHashTable<UIView *> *targets;
+static NSHashTable<UIView *> *queuedViews;
 static NSMutableDictionary<NSString *, CPViewAction> *actions;
 static NSMutableSet<NSString *> *registered;
 static NSMutableSet<NSString *> *trackedSetters;
@@ -13,6 +14,7 @@ static char recordsKey;
 static thread_local unsigned int applying;
 static thread_local unsigned int layingOut;
 static thread_local NSInteger activeStyle;
+static void QueueApply(UIView *view);
 
 static NSString *Setter(NSString *property) {
     return [NSString stringWithFormat:@"set%@%@:", [[property substringToIndex:1] uppercaseString], [property substringFromIndex:1]];
@@ -80,6 +82,11 @@ void CPApplyImageColor(UIImageView *view, UIColor *color) {
         return [source isKindOfClass:UIImage.class] ? [source imageWithTintColor:color renderingMode:UIImageRenderingModeAlwaysOriginal] : source;
     });
 }
+void CPTransformValue(id object, NSString *property, BOOL enabled, id context, id (^transform)(id)) {
+    if (!object || !NSThread.isMainThread) return;
+    CPPropertyConcreteInput(Records(object,NO)[property],CPGetObject(object,property),context);
+    CPTransform(object,property,enabled,transform);
+}
 void CPApplySymbolColor(UIImageView *view, UIColor *color) {
     if (![view isKindOfClass:UIImageView.class] || !NSThread.isMainThread) return;
     // Reuse can replace a symbol with a photo; release the old transform without tinting it.
@@ -106,8 +113,11 @@ void CPRegisterColorGetter(NSString *className, NSString *selector, NSString *gr
     MSHookMessageEx(cls,sel,hook,&original); CPRecordCapability(key,YES);
 }
 void CPRegisterTabColorGetter(NSString *selector) {
-    Class cls=NSClassFromString(@"UITabBarButton"); SEL sel=NSSelectorFromString(selector);
-    NSString *key=[@"tab-state:" stringByAppendingString:selector];
+    CPRegisterStateColorGetter(@"UITabBarButton",selector,@"tabbar",@"normal",@"selected");
+}
+void CPRegisterStateColorGetter(NSString *className, NSString *selector, NSString *group, NSString *normal, NSString *selected) {
+    Class cls=NSClassFromString(className); SEL sel=NSSelectorFromString(selector);
+    NSString *key=[NSString stringWithFormat:@"state:%@.%@",className,selector];
     if ([trackedSetters containsObject:key]) return;
     Method m=class_getInstanceMethod(cls,sel);
     if (!m || method_getNumberOfArguments(m)!=3 || !TypeStarts(m,YES,0,'@') ||
@@ -115,8 +125,13 @@ void CPRegisterTabColorGetter(NSString *selector) {
     [trackedSetters addObject:key]; __block IMP original=NULL;
     IMP hook=imp_implementationWithBlock(^id(UIView *view,NSUInteger state) {
         id source=((id (*)(id,SEL,NSUInteger))original)(view,sel,state);
-        if (!NSThread.isMainThread) return source;
-        return CPColor(@"tabbar",(state & UIControlStateSelected) ? @"selected" : @"normal",view) ?: source;
+        if (!NSThread.isMainThread || (state & UIControlStateDisabled)) return source;
+        if ([className isEqual:@"UITabBarButton"] && (state & UIControlStateSelected) &&
+            [NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"]) {
+            UIColor *filza=CPColor(@"filza",@"accent",view);
+            if (filza) return filza;
+        }
+        return CPColor(group,(state & UIControlStateSelected) ? selected : normal,view) ?: source;
     });
     MSHookMessageEx(cls,sel,hook,&original); CPRecordCapability(key,YES);
 }
@@ -139,7 +154,7 @@ BOOL CPGroupEnabled(NSString *group, UIView *view) {
     NSString *bundle=NSBundle.mainBundle.bundleIdentifier ?: @"";
     if ([configuration[@"excludedApps"] containsObject:bundle]) return NO;
     if ((isSystem || [group isEqual:@"status"] || [group isEqual:@"controlcenter"]) && ![configuration[@"systemEnabled"] boolValue]) return NO;
-    if (view && CPIsSettingsView(view)) return NO;
+    if (view && ![group isEqual:@"switch"] && CPIsSettingsView(view)) return NO;
     return YES;
 }
 UIColor *CPColor(NSString *group, NSString *role, UIView *view) {
@@ -147,7 +162,14 @@ UIColor *CPColor(NSString *group, NSString *role, UIView *view) {
     NSDictionary *r=configuration[@"roles"][[NSString stringWithFormat:@"%@.%@",group,role]];
     if (![r[@"enabled"] boolValue]) return nil;
     UITraitCollection *traits=view ? view.traitCollection : UITraitCollection.currentTraitCollection;
-    return CPParseHex(r[traits.userInterfaceStyle == UIUserInterfaceStyleDark ? @"dark" : @"light"]);
+    // CC modules can force dark local traits even while the phone is in light mode.
+    // Select the user's system palette, rather than that module's material style.
+    NSInteger style=traits.userInterfaceStyle;
+    if ([group isEqual:@"controlcenter"]) {
+        NSInteger screenStyle=UIScreen.mainScreen.traitCollection.userInterfaceStyle;
+        if (screenStyle!=UIUserInterfaceStyleUnspecified) style=screenStyle;
+    }
+    return CPParseHex(r[style == UIUserInterfaceStyleDark ? @"dark" : @"light"]);
 }
 void CPRecordCapability(NSString *name, BOOL supported) {
     static NSMutableDictionary *last;
@@ -157,13 +179,46 @@ void CPRecordCapability(NSString *name, BOOL supported) {
     os_log(OS_LOG_DEFAULT, "[ChromaPalette] %{public}@ : %{public}s", name, supported ? "installed" : "unavailable/skipped");
 }
 static void Apply(UIView *view, CPViewAction action) {
-    if (applying || !NSThread.isMainThread) return;
+    if (!NSThread.isMainThread) return;
     [targets addObject:view];
+    if (applying) return;
     NSInteger previousStyle=activeStyle;
     activeStyle=view.traitCollection.userInterfaceStyle;
     ++applying;
     @try { action(view); }
     @finally { --applying; activeStyle=previousStyle; }
+}
+static CPViewAction ActionForView(UIView *view) {
+    for (Class cls=view.class; cls; cls=class_getSuperclass(cls)) {
+        CPViewAction action=actions[NSStringFromClass(cls)];
+        if (action) return action;
+    }
+    return nil;
+}
+static void QueueApply(UIView *view) {
+    if (!NSThread.isMainThread || applying || !view || [queuedViews containsObject:view]) return;
+    [queuedViews addObject:view];
+    __weak UIView *weakView=view;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        UIView *live=weakView;
+        if (!live) return;
+        [queuedViews removeObject:live];
+        CPViewAction action=ActionForView(live);
+        if (action) Apply(live,action);
+    });
+}
+void CPRegisterViewEvent(NSString *className, NSString *selector) {
+    Class cls=NSClassFromString(className); SEL sel=NSSelectorFromString(selector);
+    NSString *key=[NSString stringWithFormat:@"event:%@.%@",className,selector];
+    if ([trackedSetters containsObject:key]) return;
+    Method method=class_getInstanceMethod(cls,sel);
+    if (!cls || ![cls isSubclassOfClass:UIView.class] || !method || method_getNumberOfArguments(method)!=2 || !TypeStarts(method,YES,0,'v')) return;
+    [trackedSetters addObject:key]; __block IMP original=NULL;
+    IMP hook=imp_implementationWithBlock(^(UIView *view) {
+        ((void (*)(id,SEL))original)(view,sel);
+        QueueApply(view);
+    });
+    MSHookMessageEx(cls,sel,hook,&original);
 }
 static void TrackSetter(Class cls, NSString *property) {
     NSString *key=[NSString stringWithFormat:@"%@.%@",NSStringFromClass(cls),property];
@@ -201,36 +256,59 @@ void CPRegisterView(NSString *className, NSArray<NSString *> *properties, CPView
         Apply(view,action);
     });
     MSHookMessageEx(cls,sel,hook,&original);
+    CPRegisterViewEvent(className,@"didMoveToWindow");
     // Invalidate cached transformations when the local appearance changes.
     SEL trait=@selector(traitCollectionDidChange:);
     if (CPVoidObjectMethod(cls,trait)) {
         __block IMP oldTrait=NULL;
         IMP newTrait=imp_implementationWithBlock(^(UIView *view,UITraitCollection *previous) {
             ((void (*)(id,SEL,id))oldTrait)(view,trait,previous);
-            if (NSThread.isMainThread && (!previous || previous.userInterfaceStyle!=view.traitCollection.userInterfaceStyle)) {
-                [view setNeedsLayout];
-            }
+            // A forced-dark CC view may receive changed environment traits while
+            // its own userInterfaceStyle stays dark. Reconcile without a layout loop.
+            QueueApply(view);
         });
         MSHookMessageEx(cls,trait,newTrait,&oldTrait);
     }
     CPRecordCapability(className,YES);
 }
+static NSMutableArray<UIView *> *reconcileViews;
+static NSUInteger reconcileVisited;
+static void ReconcileBatch(void) {
+    for (NSUInteger n=0; reconcileViews.count && n<128 && reconcileVisited<8192; ++n,++reconcileVisited) {
+        UIView *view=reconcileViews.lastObject; [reconcileViews removeLastObject];
+        [reconcileViews addObjectsFromArray:view.subviews];
+        CPViewAction action=ActionForView(view);
+        if (action) {
+            CPInvalidatePropertyRecords(Records(view,NO));
+            Apply(view,action);
+        }
+    }
+    if (reconcileViews.count && reconcileVisited<8192) dispatch_async(dispatch_get_main_queue(), ^{ ReconcileBatch(); });
+    else reconcileViews=nil;
+}
+static void ReconcileWindows(void) {
+    if (reconcileViews) return;
+    reconcileViews=[NSMutableArray array]; reconcileVisited=0;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes)
+        if ([scene isKindOfClass:UIWindowScene.class]) [reconcileViews addObjectsFromArray:((UIWindowScene *)scene).windows];
+    if (!reconcileViews.count) [reconcileViews addObjectsFromArray:UIApplication.sharedApplication.windows];
+    // Iterative, bounded, and split across main-queue turns. No perpetual timer.
+    dispatch_async(dispatch_get_main_queue(), ^{ ReconcileBatch(); });
+}
 static void Refresh(void) {
     configuration=CPReadConfiguration(); ++revision;
     for (UIView *view in targets.allObjects) {
-        // Most specific class action; avoid applying parent actions a second time.
-        for (Class cls=view.class; cls; cls=class_getSuperclass(cls)) {
-            CPViewAction action=actions[NSStringFromClass(cls)];
-            if (action) { Apply(view,action); break; }
-        }
+        CPViewAction action=ActionForView(view);
+        if (action) Apply(view,action);
     }
+    ReconcileWindows();
 }
 static void Changed(CFNotificationCenterRef center,void *observer,CFStringRef name,const void *object,CFDictionaryRef userInfo) {
     dispatch_async(dispatch_get_main_queue(), ^{ Refresh(); });
 }
 void CPStart(BOOL systemProcess, dispatch_block_t install) {
     NSCAssert(NSThread.isMainThread, @"Initialize on main thread");
-    isSystem=systemProcess; targets=[NSHashTable weakObjectsHashTable];
+    isSystem=systemProcess; targets=[NSHashTable weakObjectsHashTable]; queuedViews=[NSHashTable weakObjectsHashTable];
     actions=[NSMutableDictionary dictionary]; registered=[NSMutableSet set]; trackedSetters=[NSMutableSet set];
     configuration=CPReadConfiguration(); revision=1;
     install();
@@ -241,11 +319,22 @@ void CPStart(BOOL systemProcess, dispatch_block_t install) {
         dispatch_async(dispatch_get_main_queue(), ^{
             if (installPending) return;
             installPending=YES;
-            dispatch_async(dispatch_get_main_queue(), ^{ installPending=NO; install(); });
+            dispatch_async(dispatch_get_main_queue(), ^{ installPending=NO; install(); ReconcileWindows(); });
         });
     };
-    for (NSString *name in @[NSBundleDidLoadNotification,UIKeyboardWillShowNotification])
+    for (NSString *name in @[NSBundleDidLoadNotification])
         [NSNotificationCenter.defaultCenter addObserverForName:name object:nil queue:nil usingBlock:^(NSNotification *note) { scheduleInstall(); }];
-    [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) { install(); Refresh(); }];
+    __block NSUInteger activation=0;
+    dispatch_block_t mounted=^{
+        NSUInteger generation=++activation;
+        install(); Refresh();
+        // Catch windows created after injection and late appearance setup at launch.
+        for (NSNumber *delay in @[@0.35,@1.2]) dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(delay.doubleValue*NSEC_PER_SEC)),dispatch_get_main_queue(), ^{
+            if (generation==activation) ReconcileWindows();
+        });
+    };
+    [NSNotificationCenter.defaultCenter addObserverForName:UIApplicationDidBecomeActiveNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) { mounted(); }];
+    [NSNotificationCenter.defaultCenter addObserverForName:UIWindowDidBecomeVisibleNotification object:nil queue:NSOperationQueue.mainQueue usingBlock:^(NSNotification *note) { ReconcileWindows(); }];
+    mounted();
     os_log(OS_LOG_DEFAULT,"[ChromaPalette] initialized in %{public}@; libSandy=%d",NSBundle.mainBundle.bundleIdentifier,CPPreparePreferences());
 }
