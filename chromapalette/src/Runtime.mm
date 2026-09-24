@@ -14,6 +14,7 @@ static char recordsKey;
 static thread_local unsigned int applying;
 static thread_local unsigned int layingOut;
 static thread_local NSInteger activeStyle;
+static BOOL reconciling;
 static void QueueApply(UIView *view);
 
 static NSString *Setter(NSString *property) {
@@ -60,6 +61,9 @@ void CPTransform(id object, NSString *property, BOOL enabled, id (^transform)(id
     if (!CPObjectMethod(object_getClass(object), get, 0) || !CPVoidObjectMethod(object_getClass(object), set)) return;
     NSMutableDictionary *records = Records(object, enabled);
     if (!records) return;
+    // Reconcile non-view objects too (navigation/tab items may override their bars).
+    // This marks one transform dirty without resetting its conflict budget.
+    if (reconciling) CPInvalidatePropertyRecord(records[property]);
     BOOL blocked = CPUpdateProperty(records, property, enabled, revision, activeStyle, CACurrentMediaTime(),
       ^id { return CPGetObject(object, property); }, ^(id desired) {
         ++applying;
@@ -279,8 +283,9 @@ static void ReconcileBatch(void) {
         [reconcileViews addObjectsFromArray:view.subviews];
         CPViewAction action=ActionForView(view);
         if (action) {
-            CPInvalidatePropertyRecords(Records(view,NO));
-            Apply(view,action);
+            BOOL previous=reconciling; reconciling=YES;
+            @try { Apply(view,action); }
+            @finally { reconciling=previous; }
         }
     }
     if (reconcileViews.count && reconcileVisited<8192) dispatch_async(dispatch_get_main_queue(), ^{ ReconcileBatch(); });

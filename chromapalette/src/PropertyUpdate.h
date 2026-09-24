@@ -3,9 +3,12 @@
 // Foundation-only update engine, also exercised by the macOS regression test.
 static inline id CPBoxValue(id value) { return value ?: NSNull.null; }
 static inline id CPUnboxValue(id value) { return value == NSNull.null ? nil : value; }
-static inline void CPInvalidatePropertyRecords(NSMutableDictionary *records) {
+static inline void CPInvalidatePropertyRecord(NSMutableDictionary *record) {
     // Lifecycle reconciliation never clears the conflict breaker or its write budget.
-    for (NSMutableDictionary *record in records.allValues) record[@"dirty"]=@YES;
+    if (record) record[@"dirty"]=@YES;
+}
+static inline void CPInvalidatePropertyRecords(NSMutableDictionary *records) {
+    for (NSMutableDictionary *record in records.allValues) CPInvalidatePropertyRecord(record);
 }
 static inline BOOL CPSameValue(id a, id b) { return a == b || (a && b && [a isEqual:b]); }
 static inline void CPPropertySourceChanged(NSMutableDictionary *record, id value) {
