@@ -20,6 +20,11 @@ NSDictionary *CPNormalizeConfiguration(id input) {
     NSMutableDictionary *out = [defaults mutableCopy];
     for (NSString *k in @[@"enabled", @"systemEnabled"])
         if ([input[k] isKindOfClass:NSNumber.class]) out[k] = @([input[k] boolValue]);
+    // Preserve colors on upgrade, but do not automatically reactivate the old
+    // all-enabled configuration that could freeze apps in 0.1.0.
+    if (![input[@"schema"] isKindOfClass:NSNumber.class] || [input[@"schema"] integerValue] < 2) {
+        out[@"enabled"]=@NO; out[@"systemEnabled"]=@NO;
+    }
     NSMutableDictionary *groups = [defaults[@"groups"] mutableCopy];
     NSDictionary *inGroups = [input[@"groups"] isKindOfClass:NSDictionary.class] ? input[@"groups"] : @{};
     for (NSString *k in groups.allKeys) if ([inGroups[k] isKindOfClass:NSNumber.class]) groups[k] = @([inGroups[k] boolValue]);

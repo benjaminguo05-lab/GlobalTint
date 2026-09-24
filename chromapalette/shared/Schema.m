@@ -79,7 +79,7 @@ NSDictionary *CPDefaults(void) {
             roles[key] = @{ @"enabled":r[@"enabled"], @"light":r[@"light"], @"dark":r[@"dark"] };
         }
     }
-    return @{ @"schema":@1, @"enabled":@NO, @"systemEnabled":@NO,
+    return @{ @"schema":@2, @"enabled":@NO, @"systemEnabled":@NO,
               @"groups":groups, @"roles":roles, @"excludedApps":@[] };
 }
 UIColor *CPParseHex(id input) {
