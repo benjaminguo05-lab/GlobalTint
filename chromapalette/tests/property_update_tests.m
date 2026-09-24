@@ -55,7 +55,34 @@ int main(void) {
         assert(writes==8);
         CPUpdateProperty(records,@"appearance",YES,5,1,101,read,write,paint);
         assert(writes==9);
-        puts("Property update regressions passed: copy identity, host updates, traits, restoration, conflict breaker.");
+        // Concrete inputs: host writes made inside layout must be noticed, but stay bounded.
+        records=[NSMutableDictionary dictionary];
+        __block NSString *actual=@"blue";
+        __block NSString *chosen=@"green";
+        __block NSUInteger colorWrites=0;
+        id (^readColor)(void)=^id { return actual; };
+        void (^writeColor)(id)=^(id value) { actual=value; ++colorWrites; };
+        id (^paintColor)(id)=^id(id source) { return chosen; };
+        for (NSUInteger i=0;i<10000;i++) {
+            CPPropertyConcreteInput(records[@"color"],actual,chosen);
+            CPUpdateProperty(records,@"color",YES,1,1,0.1,readColor,writeColor,paintColor);
+        }
+        assert(colorWrites==1 && [actual isEqual:@"green"]);
+        chosen=@"gray"; // tab selection changes without a config revision
+        CPPropertyConcreteInput(records[@"color"],actual,chosen);
+        CPUpdateProperty(records,@"color",YES,1,1,0.2,readColor,writeColor,paintColor);
+        assert(colorWrites==2 && [actual isEqual:@"gray"]);
+        trips=0;
+        for (NSUInteger i=0;i<10000;i++) {
+            actual=@"blue";
+            CPPropertyConcreteInput(records[@"color"],actual,chosen);
+            trips+=CPUpdateProperty(records,@"color",YES,1,1,0.3,readColor,writeColor,paintColor);
+        }
+        assert(colorWrites==8 && trips==1);
+        CPPropertyConcreteInput(records[@"color"],actual,nil);
+        CPUpdateProperty(records,@"color",NO,1,1,0.4,readColor,writeColor,paintColor);
+        assert([actual isEqual:@"blue"] && records.count==0);
+        puts("Property update regressions passed: copy identity, host updates, traits, restoration, concrete colors/state, conflict breaker.");
     }
     return 0;
 }
