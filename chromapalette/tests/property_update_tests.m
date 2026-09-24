@@ -82,7 +82,35 @@ int main(void) {
         CPPropertyConcreteInput(records[@"color"],actual,nil);
         CPUpdateProperty(records,@"color",NO,1,1,0.4,readColor,writeColor,paintColor);
         assert([actual isEqual:@"blue"] && records.count==0);
-        puts("Property update regressions passed: copy identity, host updates, traits, restoration, concrete colors/state, conflict breaker.");
+        // Launch/window/trait reconciliation dirties copy properties, but never resets
+        // their conflict budget. Even repeated lifecycle events remain bounded.
+        records=[NSMutableDictionary dictionary]; stored=Value(10); writes=0; trips=0;
+        for (NSUInteger i=0;i<10000;i++) {
+            CPInvalidatePropertyRecords(records);
+            trips+=CPUpdateProperty(records,@"appearance",YES,6,1,0.1,read,write,paint);
+        }
+        assert(writes==8 && trips==1);
+        CPInvalidatePropertyRecords(records);
+        CPUpdateProperty(records,@"appearance",YES,6,2,10.0,read,write,paint);
+        assert(writes==8); // a later lifecycle/trait callback does not restart it
+        CPUpdateProperty(records,@"appearance",NO,6,2,10.1,read,write,paint);
+        assert(stored.number==10);
+        // Link display attributes preserve all unrelated metadata and restore exactly.
+        records=[NSMutableDictionary dictionary];
+        __block NSDictionary *links=@{@"foreground":@"yellow",@"underline":@1,@"custom":@"preserved"};
+        NSDictionary *baseline=links;
+        __block NSUInteger linkWrites=0;
+        id (^readLinks)(void)=^id { return [links copy]; };
+        void (^writeLinks)(id)=^(id value) { links=[value copy]; ++linkWrites; };
+        id (^paintLinks)(id)=^id(id source) { NSMutableDictionary *a=[source mutableCopy]; a[@"foreground"]=@"green"; return a; };
+        for (NSUInteger i=0;i<10000;i++) {
+            CPPropertyConcreteInput(records[@"links"],links,@"green");
+            CPUpdateProperty(records,@"links",YES,1,1,0.1,readLinks,writeLinks,paintLinks);
+        }
+        assert(linkWrites==1 && [links[@"custom"] isEqual:@"preserved"] && [links[@"underline"] isEqual:@1]);
+        CPUpdateProperty(records,@"links",NO,1,1,0.2,readLinks,writeLinks,paintLinks);
+        assert([links isEqual:baseline]);
+        puts("Property update regressions passed: copy identity, host updates, traits, restoration, concrete colors/state, lifecycle budgets, link attributes, conflict breaker.");
     }
     return 0;
 }

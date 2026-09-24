@@ -14,6 +14,8 @@ def check_sources():
     with (ROOT / 'layout/Library/PreferenceLoader/Preferences/ChromaPalette.plist').open('rb') as f:
         entry = plistlib.load(f)['entry']
     assert entry['bundle'] == 'ChromaPrefs'
+    assert entry['icon'] == 'Spectrum.png'
+    assert (ROOT / 'prefs/Spectrum.png').read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
     prefs = (ROOT / 'prefs/Prefs.m').read_text(encoding='utf-8')
     assert '@interface ' + entry['detail'] in prefs
     info=plistlib.loads((ROOT / 'prefs/Info.plist').read_bytes())
@@ -36,7 +38,13 @@ def check_sources():
             groups[current].add(r.group(1))
     for group, role in re.findall(r'CPColor\(@"(\w+)",@"(\w+)"', src):
         assert role in groups.get(group, set()), (group, role)
-    assert {'navigation','toolbar','table','cell','switch','slider','keyboard','status','controlcenter'} <= groups.keys()
+    assert {'navigation','toolbar','table','cell','switch','slider','status','controlcenter'} <= groups.keys()
+    assert 'keyboard' not in groups
+    assert groups['switch'] == {'on','off'}
+    assert groups['status'] == {'battery'}
+    assert groups['controlcenter'] == {'active','selectedGlyph'}
+    assert 'editHex' not in prefs and '输入 HEX' not in prefs
+    assert not re.search(r'UIKB|UIKeyboard', (ROOT / 'src/Private.mm').read_text())
     print(f'Project contracts OK: {len(groups)} component groups, {sum(map(len, groups.values()))} color roles.')
 
 def ar_members(data):
@@ -67,6 +75,7 @@ def check_deb(path):
             'Library/MobileSubstrate/DynamicLibraries/ChromaSystem.plist',
             'Library/PreferenceBundles/ChromaPrefs.bundle/ChromaPrefs',
             'Library/PreferenceBundles/ChromaPrefs.bundle/Info.plist',
+            'Library/PreferenceBundles/ChromaPrefs.bundle/Spectrum.png',
             'Library/PreferenceLoader/Preferences/ChromaPalette.plist',
             'Library/libSandy/com.benja.chromapalette.plist']
         for name in required:
@@ -74,6 +83,7 @@ def check_deb(path):
             if name.endswith('.dylib') or name.endswith('/ChromaPrefs'):
                 data=tf.extractfile(files[name]).read()
                 assert data[:4] in (b'\xca\xfe\xba\xbe', b'\xca\xfe\xba\xbf'), f'{name}: expected universal Mach-O'
+        assert tf.extractfile(files['Library/PreferenceBundles/ChromaPrefs.bundle/Spectrum.png']).read() == (ROOT / 'prefs/Spectrum.png').read_bytes()
         assert not any(k.startswith('var/jb/') for k in files)
     print(f'Debian package contracts OK: {path.name}')
 
