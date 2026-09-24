@@ -38,7 +38,7 @@
     return self.group ? 1+[self.group[@"roles"] count] : 3;
 }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (self.group) return section==0 ? 1 : 5;
+    if (self.group) return section==0 ? 1 : 3;
     return section==0 ? 2 : section==1 ? CPGroups().count : 4;
 }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -47,8 +47,8 @@
 }
 - (NSString *)tableView:(UITableView *)tableView titleForFooterInSection:(NSInteger)section {
     if (self.group) return section==0 ? self.group[@"note"] : nil;
-    if (section==0) return @"首次安装默认关闭。先开启总开关测试普通控件；键盘、状态栏与控制中心还需开启各自开关。系统界面总开关负责桌面与状态栏。";
-    if (section==1) return @"每项可分别选择浅色、深色颜色和透明度。此设置页保持原色，便于随时关闭插件。修改会通知已注入的应用；键盘缓存可能需要重新打开应用。";
+    if (section==0) return @"首次安装默认关闭。先开启总开关测试普通控件；电池填充与控制中心还需开启各自开关和系统界面总开关。";
+    if (section==1) return @"每项可分别选择浅色、深色颜色和透明度。此设置页的开关轨道也参与配色，其余控件保持原色。修改会通知已注入的应用。";
     return @"目标：iPhone 15 Pro Max / iOS 17.1.1 / Relaxin。实验性接口需要真机验证；编译成功不代表所有系统界面均已验证。";
 }
 - (NSString *)roleAtSection:(NSInteger)section {
@@ -90,9 +90,9 @@
             cell.textLabel.text=@"替换此项颜色";
             [self addSwitch:cell value:[r[@"enabled"] boolValue] tag:path.section];
         } else {
-            BOOL dark=(path.row==2 || path.row==4); NSString *mode=dark ? @"dark" : @"light";
-            cell.textLabel.text=path.row<3 ? (dark ? @"深色模式：选择颜色" : @"浅色模式：选择颜色") : (dark ? @"深色模式：输入 HEX" : @"浅色模式：输入 HEX");
-            cell.detailTextLabel.text=r[mode]; cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
+            BOOL dark=(path.row==2); NSString *mode=dark ? @"dark" : @"light";
+            cell.textLabel.text=dark ? @"深色模式：选择颜色" : @"浅色模式：选择颜色";
+            cell.detailTextLabel.text=@"点击打开颜色选择器"; cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
             UIView *swatch=[[UIView alloc] initWithFrame:CGRectMake(0,0,30,30)];
             swatch.backgroundColor=CPParseHex(r[mode]); swatch.layer.cornerRadius=7;
             swatch.layer.borderWidth=1; swatch.layer.borderColor=UIColor.separatorColor.CGColor; cell.accessoryView=swatch;
@@ -119,21 +119,6 @@
 }
 - (void)colorPickerViewControllerDidSelectColor:(UIColorPickerViewController *)controller { [self setColor:controller.selectedColor]; }
 - (void)colorPickerViewControllerDidFinish:(UIColorPickerViewController *)controller { [self setColor:controller.selectedColor]; }
-- (void)editHex {
-    UIAlertController *a=[UIAlertController alertControllerWithTitle:@"输入颜色" message:@"使用 #RRGGBB 或 #RRGGBBAA；AA 为透明度，例如 FF 完全不透明。" preferredStyle:UIAlertControllerStyleAlert];
-    [a addTextFieldWithConfigurationHandler:^(UITextField *f) { f.text=self.configuration[@"roles"][self.editingRole][self.editingMode]; f.autocapitalizationType=UITextAutocapitalizationTypeAllCharacters; f.autocorrectionType=UITextAutocorrectionTypeNo; }];
-    [a addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [a addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        UIColor *color=CPParseHex(a.textFields.firstObject.text);
-        if (color) [self setColor:color];
-        else dispatch_async(dispatch_get_main_queue(), ^{
-            UIAlertController *error=[UIAlertController alertControllerWithTitle:@"颜色格式不正确" message:@"请输入 6 位或 8 位十六进制颜色；原设置未修改。" preferredStyle:UIAlertControllerStyleAlert];
-            [error addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
-            [self presentViewController:error animated:YES completion:nil];
-        });
-    }]];
-    [self presentViewController:a animated:YES completion:nil];
-}
 - (void)editExclusions {
     UIAlertController *a=[UIAlertController alertControllerWithTitle:@"不改色的应用" message:@"输入应用标识，多个用逗号分隔。例如 com.apple.mobilesafari。此列表不会开启或关闭 Relaxin 的注入。" preferredStyle:UIAlertControllerStyleAlert];
     [a addTextFieldWithConfigurationHandler:^(UITextField *f) { f.text=[self.configuration[@"excludedApps"] componentsJoinedByString:@","]; f.autocapitalizationType=UITextAutocapitalizationTypeNone; f.autocorrectionType=UITextAutocorrectionTypeNo; }];
@@ -156,7 +141,7 @@
 }
 - (void)diagnostics {
     NSDictionary *disk=CPReadConfiguration();
-    NSString *message=[NSString stringWithFormat:@"版本：0.1.2\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSString *message=[NSString stringWithFormat:@"版本：0.1.3\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
     UIAlertController *a=[UIAlertController alertControllerWithTitle:@"配置读取诊断" message:message preferredStyle:UIAlertControllerStyleAlert];
     [a addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:a animated:YES completion:nil];
 }
@@ -174,8 +159,7 @@
         return;
     }
     if (!path.section || !path.row) return;
-    self.editingRole=[self roleAtSection:path.section]; self.editingMode=(path.row==2 || path.row==4) ? @"dark" : @"light";
-    if (path.row>=3) { [self editHex]; return; }
+    self.editingRole=[self roleAtSection:path.section]; self.editingMode=(path.row==2) ? @"dark" : @"light";
     UIColorPickerViewController *picker=[[UIColorPickerViewController alloc] init]; picker.delegate=self; picker.supportsAlpha=YES;
     picker.selectedColor=CPParseHex(self.configuration[@"roles"][self.editingRole][self.editingMode]);
     [self presentViewController:picker animated:YES completion:nil];
@@ -185,15 +169,14 @@
 // Deliberately outside CPPrefs* so the component hooks can color this test page.
 @implementation CPDemoController
 - (void)viewDidLoad { [super viewDidLoad]; self.title=@"控件预览"; }
-- (NSInteger)tableView:(UITableView *)t numberOfRowsInSection:(NSInteger)section { return 5; }
+- (NSInteger)tableView:(UITableView *)t numberOfRowsInSection:(NSInteger)section { return 4; }
 - (UITableViewCell *)tableView:(UITableView *)t cellForRowAtIndexPath:(NSIndexPath *)path {
     UITableViewCell *cell=[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
-    cell.textLabel.text=@[@"主要文字",@"切换开关",@"滑块",@"进度条",@"打开键盘"][path.row];
+    cell.textLabel.text=@[@"主要文字",@"切换开关",@"滑块",@"进度条"][path.row];
     cell.detailTextLabel.text=path.row==0 ? @"辅助文字 · 点击查看选中背景" : nil;
     if (path.row==1) { UISwitch *s=[[UISwitch alloc] init]; s.on=YES; cell.accessoryView=s; }
     if (path.row==2) { UISlider *s=[[UISlider alloc] initWithFrame:CGRectMake(0,0,160,32)]; s.value=0.6; cell.accessoryView=s; }
     if (path.row==3) { UIProgressView *p=[[UIProgressView alloc] initWithFrame:CGRectMake(0,0,160,12)]; p.progress=0.6; cell.accessoryView=p; }
-    if (path.row==4) { UITextField *f=[[UITextField alloc] initWithFrame:CGRectMake(0,0,160,36)]; f.placeholder=@"点此输入"; f.borderStyle=UITextBorderStyleRoundedRect; cell.accessoryView=f; }
     return cell;
 }
 @end
