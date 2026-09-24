@@ -36,9 +36,12 @@ static void Navigation(UINavigationBar *bar) {
     for (NSString *p in @[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"])
         CPTransform(bar,p,active,^id(id source) { return NavigationAppearance(source,bar); });
     // Item appearances have precedence over the bar's appearance on iOS 15+.
-    for (UINavigationItem *item in bar.items)
+    for (UINavigationItem *item in bar.items) {
+        for (UIBarButtonItem *button in item.leftBarButtonItems) CPApplyColor(button,@"tintColor",ItemsColor(@"navigation",@"items",bar));
+        for (UIBarButtonItem *button in item.rightBarButtonItems) CPApplyColor(button,@"tintColor",ItemsColor(@"navigation",@"items",bar));
         for (NSString *p in @[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"])
             CPTransform(item,p,active,^id(id source) { return NavigationAppearance(source,bar); });
+    }
 }
 static void Toolbar(UIToolbar *bar) {
     UIColor *items=ItemsColor(@"toolbar",@"items",bar), *bg=CPColor(@"toolbar",@"background",bar);
@@ -73,6 +76,12 @@ static void Tabbar(UITabBar *bar) {
             CPTransform(item,p,active,^id(id source) { return TabAppearance(source,bar); });
     }
 }
+static NSAttributedString *ListText(NSAttributedString *source, UIColor *color) {
+    if (!source || !color || !source.length) return source;
+    NSMutableAttributedString *copy=[source mutableCopy];
+    [copy addAttribute:NSForegroundColorAttributeName value:color range:NSMakeRange(0,copy.length)];
+    return copy;
+}
 static void Cell(UITableViewCell *cell) {
     UIColor *bg=CPColor(@"cell",@"background",cell), *text=CPColor(@"cell",@"text",cell), *detail=CPColor(@"cell",@"detail",cell);
     CPApplyColor(cell,@"backgroundColor",bg);
@@ -92,8 +101,8 @@ static void Cell(UITableViewCell *cell) {
         CPTransform(cell,@"contentConfiguration",(text || detail || icon) && content != nil,^id(id source) {
             if (![source isKindOfClass:UIListContentConfiguration.class]) return source;
             UIListContentConfiguration *a=[source copy];
-            if (text) { a.textProperties.color=text; a.textProperties.colorTransformer=nil; }
-            if (detail) { a.secondaryTextProperties.color=detail; a.secondaryTextProperties.colorTransformer=nil; }
+            if (text) { a.textProperties.color=text; a.textProperties.colorTransformer=nil; a.attributedText=ListText(a.attributedText,text); }
+            if (detail) { a.secondaryTextProperties.color=detail; a.secondaryTextProperties.colorTransformer=nil; a.secondaryAttributedText=ListText(a.secondaryAttributedText,detail); }
             if (icon) { a.imageProperties.tintColor=icon; a.imageProperties.tintColorTransformer=nil; }
             return a;
         });
@@ -114,8 +123,8 @@ static void CollectionCell(UICollectionViewListCell *cell) {
         if (![source isKindOfClass:UIListContentConfiguration.class]) return source;
         UIListContentConfiguration *a=[source copy];
         if (icon) { a.imageProperties.tintColor=icon; a.imageProperties.tintColorTransformer=nil; }
-        if (text) { a.textProperties.color=text; a.textProperties.colorTransformer=nil; }
-        if (detail) { a.secondaryTextProperties.color=detail; a.secondaryTextProperties.colorTransformer=nil; }
+        if (text) { a.textProperties.color=text; a.textProperties.colorTransformer=nil; a.attributedText=ListText(a.attributedText,text); }
+        if (detail) { a.secondaryTextProperties.color=detail; a.secondaryTextProperties.colorTransformer=nil; a.secondaryAttributedText=ListText(a.secondaryAttributedText,detail); }
         return a;
     });
     if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"]) NotesSymbols(cell);
@@ -140,42 +149,19 @@ void CPInstallComponents(void) {
         CPRegisterTabColorGetter(selector);
     CPRegisterColorGetter(@"UISwitchModernVisualElement",@"_effectiveOnTintColor",@"switch",@"on");
     CPRegisterColorGetter(@"UISwitchModernVisualElement",@"_effectiveTintColor",@"switch",@"off");
-    if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"]) {
-        CPRegisterView(@"UITextView",@[@"linkTextAttributes",@"tintColor"],^(UIView *v) {
-            UIColor *color=CPColor(@"notes",@"link",v);
-            CPApplyColor(v,@"tintColor",color);
-            CPTransformValue(v,@"linkTextAttributes",color!=nil,color,^id(id source) {
-                NSMutableDictionary *attrs=TextAttributes(source,color);
-                attrs[NSUnderlineColorAttributeName]=color;
-                return attrs;
-            });
-        });
-    }
-    if (IsFilza()) {
-        CPRegisterStateColorGetter(@"UIButton",@"titleColorForState:",@"filza",@"accent",@"accent");
-        CPRegisterView(@"UIWindow",@[@"tintColor"],^(UIView *v) { CPApplyColor(v,@"tintColor",CPColor(@"filza",@"accent",v)); });
-        CPRegisterView(@"UIButton",@[@"tintColor",@"configuration"],^(UIView *v) {
-            UIColor *color=CPColor(@"filza",@"accent",v);
-            UIButton *button=(UIButton *)v;
-            CPApplyColor(button,@"tintColor",color);
-            CPApplyColor(button.titleLabel,@"textColor",color);
-            CPApplySymbolColor(button.imageView,color);
-            CPTransform(button,@"configuration",color!=nil,^id(id source) {
-                UIButtonConfiguration *copy=[source copy];
-                if (copy) copy.baseForegroundColor=color;
-                return copy;
-            });
-        });
-    }
+    CPInstallAccent();
+    CPRegisterViewEvent(@"UITableViewCell",@"updateConfiguration");
+    CPRegisterViewEvent(@"UICollectionViewListCell",@"updateConfiguration");
     CPTrackProperties(@"UINavigationItem",@[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"]);
     CPTrackProperties(@"UITabBarItem",@[@"standardAppearance",@"scrollEdgeAppearance"]);
     CPTrackProperties(@"UIBarButtonItem",@[@"tintColor"]);
     CPRegisterView(@"UINavigationBar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"],^(UIView *v) { Navigation((UINavigationBar *)v); });
     CPRegisterView(@"UIToolbar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"],^(UIView *v) { Toolbar((UIToolbar *)v); });
     CPRegisterView(@"UITabBar",@[@"tintColor",@"unselectedItemTintColor",@"standardAppearance",@"scrollEdgeAppearance"],^(UIView *v) { Tabbar((UITabBar *)v); });
-    CPRegisterView(@"UITableView",@[@"backgroundColor",@"separatorColor"],^(UIView *v) {
+    CPRegisterView(@"UITableView",@[@"backgroundColor",@"separatorColor",@"sectionIndexColor"],^(UIView *v) {
         CPApplyColor(v,@"backgroundColor",CPColor(@"table",@"background",v));
         CPApplyColor(v,@"separatorColor",CPColor(@"table",@"separator",v));
+        CPApplyColor(v,@"sectionIndexColor",CPColor(@"table",@"index",v));
     });
     CPRegisterView(@"UITableViewCell",@[@"backgroundColor",@"tintColor",@"selectedBackgroundView",@"backgroundConfiguration",@"contentConfiguration"],^(UIView *v) { Cell((UITableViewCell *)v); });
     CPRegisterView(@"UICollectionViewListCell",@[@"tintColor",@"contentConfiguration"],^(UIView *v) { CollectionCell((UICollectionViewListCell *)v); });

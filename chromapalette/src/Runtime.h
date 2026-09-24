@@ -10,6 +10,7 @@ FOUNDATION_EXPORT UIColor *CPColor(NSString *group, NSString *role, UIView *view
 FOUNDATION_EXPORT BOOL CPGroupEnabled(NSString *group, UIView *view);
 FOUNDATION_EXPORT BOOL CPIsSettingsView(UIView *view);
 FOUNDATION_EXPORT void CPApplyColor(id object, NSString *property, UIColor *color);
+FOUNDATION_EXPORT id CPSourceValue(id object, NSString *property);
 FOUNDATION_EXPORT void CPApplyImageColor(UIImageView *view, UIColor *color);
 FOUNDATION_EXPORT void CPApplySymbolColor(UIImageView *view, UIColor *color);
 FOUNDATION_EXPORT void CPRegisterColorGetter(NSString *className, NSString *selector, NSString *group, NSString *role);
@@ -27,3 +28,5 @@ FOUNDATION_EXPORT void CPTrackProperties(NSString *className, NSArray<NSString *
 FOUNDATION_EXPORT void CPRecordCapability(NSString *name, BOOL supported);
 FOUNDATION_EXPORT void CPInstallComponents(void);
 FOUNDATION_EXPORT void CPInstallPrivate(BOOL systemProcess);
+
+FOUNDATION_EXPORT void CPInstallAccent(void);

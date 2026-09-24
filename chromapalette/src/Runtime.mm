@@ -79,6 +79,12 @@ void CPApplyColor(id object, NSString *property, UIColor *color) {
     CPPropertyConcreteInput(Records(object,NO)[property], CPGetObject(object,property), color);
     CPTransform(object, property, color != nil, ^id(id source) { return color; });
 }
+id CPSourceValue(id object, NSString *property) {
+    id current=CPGetObject(object,property);
+    NSMutableDictionary *record=Records(object,NO)[property];
+    CPPropertySourceChanged(record,current);
+    return record ? CPUnboxValue(record[@"source"]) : current;
+}
 void CPApplyImageColor(UIImageView *view, UIColor *color) {
     if (![view isKindOfClass:UIImageView.class] || !NSThread.isMainThread) return;
     CPPropertyConcreteInput(Records(view,NO)[@"image"], view.image, color);
@@ -236,6 +242,10 @@ static void TrackSetter(Class cls, NSString *property) {
             CPPropertySourceChanged(Records(object,NO)[property], value);
         ((void (*)(id,SEL,id))original)(object,sel,value);
         // UIKit's own setter owns layout invalidation; do not request another pass.
+        // Text/configuration can update after the final layout (async Photos cells).
+        // Coalesce a property reconciliation, never call setNeedsLayout here.
+        if (!applying && !layingOut && NSThread.isMainThread && [object isKindOfClass:UIView.class])
+            QueueApply(object);
     });
     MSHookMessageEx(cls,sel,hook,&original);
 }
