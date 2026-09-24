@@ -9,12 +9,20 @@
 	<key>Extensions</key>
 	<array>
 		<dict>
-			<key>type</key>
-			<string>file</string>
 			<key>extension_class</key>
 			<string>com.apple.app-sandbox.read-write</string>
 			<key>path</key>
 			<string>/var/mobile/Library/Preferences/com.benja.chromapalette.plist</string>
+			<key>type</key>
+			<string>file</string>
+		</dict>
+		<dict>
+			<key>extension_class</key>
+			<string>com.apple.app-sandbox.read-write</string>
+			<key>path</key>
+			<string>/var/mobile/Library/Preferences/com.benja.chromapalette.icleaner-status.plist</string>
+			<key>type</key>
+			<string>file</string>
 		</dict>
 	</array>
 </dict>
