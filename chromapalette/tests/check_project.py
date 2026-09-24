@@ -4,6 +4,7 @@ import argparse, io, pathlib, plistlib, re, tarfile
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
 def check_sources():
+    assert b"\r" not in (ROOT / "control").read_bytes(), "Debian control must use Unix LF line endings"
     for name in ('ChromaApps', 'ChromaSystem'):
         with (ROOT / (name + '.plist')).open('rb') as f:
             v = plistlib.load(f)
