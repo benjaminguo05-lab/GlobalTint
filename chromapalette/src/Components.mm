@@ -91,6 +91,9 @@ static void Cell(UITableViewCell *cell) {
     }
 }
 void CPInstallComponents(void) {
+    CPTrackProperties(@"UINavigationItem",@[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"]);
+    CPTrackProperties(@"UITabBarItem",@[@"standardAppearance",@"scrollEdgeAppearance"]);
+    CPTrackProperties(@"UIBarButtonItem",@[@"tintColor"]);
     CPRegisterView(@"UINavigationBar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"],^(UIView *v) { Navigation((UINavigationBar *)v); });
     CPRegisterView(@"UIToolbar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"],^(UIView *v) { Toolbar((UIToolbar *)v); });
     CPRegisterView(@"UITabBar",@[@"tintColor",@"unselectedItemTintColor",@"standardAppearance",@"scrollEdgeAppearance"],^(UIView *v) { Tabbar((UITabBar *)v); });
@@ -114,8 +117,12 @@ void CPInstallComponents(void) {
             [v insertSubview:underlay atIndex:0];
         }
         if (underlay) {
-            underlay.frame=v.bounds; underlay.layer.cornerRadius=CGRectGetHeight(v.bounds)/2;
-            underlay.backgroundColor=off; underlay.hidden=!off || ((UISwitch *)v).on;
+            if (!CGRectEqualToRect(underlay.frame,v.bounds)) underlay.frame=v.bounds;
+            CGFloat radius=CGRectGetHeight(v.bounds)/2;
+            if (underlay.layer.cornerRadius!=radius) underlay.layer.cornerRadius=radius;
+            if (![underlay.backgroundColor isEqual:off]) underlay.backgroundColor=off;
+            BOOL hidden=!off || ((UISwitch *)v).on;
+            if (underlay.hidden!=hidden) underlay.hidden=hidden;
         }
     });
     CPRegisterView(@"UISlider",@[@"minimumTrackTintColor",@"maximumTrackTintColor",@"thumbTintColor"],^(UIView *v) {

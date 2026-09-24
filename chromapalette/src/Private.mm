@@ -1,4 +1,5 @@
 #import "Runtime.h"
+#import <mach-o/dyld.h>
 
 static void Status(void) {
     CPRegisterView(@"_UIStatusBarStringView",@[@"textColor"],^(UIView *v) {
@@ -29,8 +30,10 @@ static void ControlCenter(void) {
             [v addSubview:overlay];
         }
         if (overlay) {
-            overlay.frame=v.bounds; overlay.backgroundColor=color;
-            overlay.layer.cornerRadius=v.layer.cornerRadius; overlay.hidden=!color;
+            if (!CGRectEqualToRect(overlay.frame,v.bounds)) overlay.frame=v.bounds;
+            if (![overlay.backgroundColor isEqual:color]) overlay.backgroundColor=color;
+            if (overlay.layer.cornerRadius!=v.layer.cornerRadius) overlay.layer.cornerRadius=v.layer.cornerRadius;
+            if (overlay.hidden!=!color) overlay.hidden=!color;
         }
     });
     CPRegisterView(@"CCUIRoundButton",@[@"highlightColor"],^(UIView *v) {
@@ -60,6 +63,11 @@ static id KeyboardTraits(id source) {
     if (!NSThread.isMainThread || !source) return source;
     UIColor *color=CPColor(@"keyboard",@"keycap",nil);
     if (!color || ![source conformsToProtocol:@protocol(NSCopying)]) return source;
+    NSString *sourceHash=CPGetObject(source,@"hashString");
+    if (![sourceHash isKindOfClass:NSString.class]) sourceHash=@"";
+    NSString *marker=[@"/ChromaPalette/" stringByAppendingString:CPHex(color)];
+    // Base/subclass hooks can see the same traits. Never grow the cache key twice.
+    if ([sourceHash hasSuffix:marker]) return source;
     Class gradientClass=NSClassFromString(@"UIKBColorGradient");
     SEL factory=NSSelectorFromString(@"gradientWithUIColor:");
     if (!CPObjectMethod(object_getClass(gradientClass),factory,1)) return source;
@@ -74,8 +82,9 @@ static id KeyboardTraits(id source) {
     // Key images are cached by traits; distinguish our output from original traits.
     SEL hash=NSSelectorFromString(@"setHashString:");
     if (CPVoidObjectMethod(object_getClass(copy),hash)) {
-        NSString *original=CPGetObject(source,@"hashString") ?: @"";
-        NSString *value=[NSString stringWithFormat:@"%@/ChromaPalette/%@",original,CPHex(color)];
+        NSRange prior=[sourceHash rangeOfString:@"/ChromaPalette/"];
+        NSString *original=prior.location==NSNotFound ? sourceHash : [sourceHash substringToIndex:prior.location];
+        NSString *value=[original stringByAppendingString:marker];
         ((void (*)(id,SEL,id))objc_msgSend)(copy,hash,value);
     }
     return copy;
@@ -91,6 +100,10 @@ static void Keyboard(void) {
     if (!hooked) hooked=[NSMutableSet set];
     Class base=NSClassFromString(@"UIKBRenderFactory");
     if (!base) { CPRecordCapability(@"UIKBRenderFactory",NO); return; }
+    static uint32_t scannedImages=0;
+    uint32_t imageCount=_dyld_image_count();
+    if (scannedImages==imageCount) return;
+    scannedImages=imageCount;
     unsigned count=0; Class *classes=objc_copyClassList(&count);
     SEL selector=NSSelectorFromString(@"traitsForKey:onKeyplane:");
     for (unsigned i=0;i<count;i++) {

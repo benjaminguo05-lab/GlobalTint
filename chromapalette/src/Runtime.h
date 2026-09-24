@@ -16,6 +16,7 @@ FOUNDATION_EXPORT id CPGetIvar(id object, const char *name);
 FOUNDATION_EXPORT BOOL CPObjectMethod(Class cls, SEL selector, unsigned int arguments);
 FOUNDATION_EXPORT BOOL CPVoidObjectMethod(Class cls, SEL selector);
 FOUNDATION_EXPORT void CPRegisterView(NSString *className, NSArray<NSString *> *properties, CPViewAction action);
+FOUNDATION_EXPORT void CPTrackProperties(NSString *className, NSArray<NSString *> *properties);
 FOUNDATION_EXPORT void CPRecordCapability(NSString *name, BOOL supported);
 FOUNDATION_EXPORT void CPInstallComponents(void);
 FOUNDATION_EXPORT void CPInstallPrivate(BOOL systemProcess);
