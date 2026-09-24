@@ -1,6 +1,14 @@
 #import "Config.h"
 #import <roothide.h>
 #import <dlfcn.h>
+#import <unistd.h>
+#import <sys/stat.h>
+
+static NSString * const IcleanerStatusPath=@"/var/mobile/Library/Preferences/com.benja.chromapalette.icleaner-status.plist";
+NSDictionary *CPIcleanerStatus(void) {
+    CPPreparePreferences();
+    return [NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:IcleanerStatusPath] error:nil];
+}
 
 int CPPreparePreferences(void) {
     static int result = -1;
@@ -50,9 +58,30 @@ NSDictionary *CPNormalizeConfiguration(id input) {
 }
 NSDictionary *CPReadConfiguration(void) {
     CPPreparePreferences();
-    NSUserDefaults *store = [[NSUserDefaults alloc] initWithSuiteName:CPPreferencePath];
-    [store synchronize];
-    return CPNormalizeConfiguration([store objectForKey:@"configuration"]);
+    // Root-launched jailbreak apps must read the same mobile-owned preferences.
+    // Read the explicit file first; the suite remains a fallback if direct access
+    // is unavailable. Never create a second root user's configuration.
+    NSDictionary *file=[NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:CPPreferencePath] error:nil];
+    id raw=file[@"configuration"];
+    BOOL direct=[raw isKindOfClass:NSDictionary.class];
+    if (!direct) {
+        NSUserDefaults *store=[[NSUserDefaults alloc] initWithSuiteName:CPPreferencePath];
+        [store synchronize]; raw=[store objectForKey:@"configuration"];
+    }
+    NSDictionary *config=CPNormalizeConfiguration(raw);
+    NSString *bundle=NSBundle.mainBundle.bundleIdentifier ?: @"";
+    if ([bundle.lowercaseString containsString:@"icleaner"]) {
+        // Local, fixed-size status only. No screen contents or user configuration.
+        NSDictionary *status=@{@"version":@"0.1.4",@"bundle":bundle,@"date":NSDate.date,
+            @"pid":@(getpid()),@"uid":@(geteuid()),@"libSandy":@(CPPreparePreferences()),
+            @"readable":@([raw isKindOfClass:NSDictionary.class]),@"direct":@(direct),
+            @"enabled":config[@"enabled"],@"excluded":@([config[@"excludedApps"] containsObject:bundle])};
+        if ([status writeToURL:[NSURL fileURLWithPath:IcleanerStatusPath] error:nil]) {
+            chmod(IcleanerStatusPath.fileSystemRepresentation,0644);
+            if (geteuid()==0) chown(IcleanerStatusPath.fileSystemRepresentation,501,501);
+        }
+    }
+    return config;
 }
 BOOL CPWriteConfiguration(NSDictionary *configuration) {
     CPPreparePreferences();
