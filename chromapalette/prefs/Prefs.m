@@ -69,7 +69,13 @@
             [self addSwitch:cell value:[self.configuration[key] boolValue] tag:path.row];
         } else if (path.section==1) {
             NSDictionary *g=CPGroups()[path.row]; cell.textLabel.text=g[@"title"];
-            cell.detailTextLabel.text=[self.configuration[@"groups"][g[@"key"]] boolValue] ? @"已开启 · 点击设置颜色" : @"已关闭 · 点击设置颜色";
+            NSUInteger enabled=0;
+            for (NSDictionary *role in g[@"roles"]) {
+                NSString *key=[NSString stringWithFormat:@"%@.%@",g[@"key"],role[@"key"]];
+                if ([self.configuration[@"roles"][key][@"enabled"] boolValue]) ++enabled;
+            }
+            cell.detailTextLabel.text=[self.configuration[@"groups"][g[@"key"]] boolValue] ?
+                [NSString stringWithFormat:@"已开启 · %lu/%lu 项颜色生效",(unsigned long)enabled,(unsigned long)[g[@"roles"] count]] : @"已关闭 · 点击设置颜色";
             cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
         } else {
             cell.textLabel.text=@[@"不改色的应用",@"控件预览",@"关闭并恢复默认设置",@"配置读取诊断"][path.row];
@@ -150,7 +156,7 @@
 }
 - (void)diagnostics {
     NSDictionary *disk=CPReadConfiguration();
-    NSString *message=[NSString stringWithFormat:@"libSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSString *message=[NSString stringWithFormat:@"版本：0.1.2\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
     UIAlertController *a=[UIAlertController alertControllerWithTitle:@"配置读取诊断" message:message preferredStyle:UIAlertControllerStyleAlert];
     [a addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:a animated:YES completion:nil];
 }
