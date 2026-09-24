@@ -31,6 +31,11 @@ jobs:
         uses: actions/checkout@v5
       - name: Check project structure
         run: python3 tests/check_project.py
+      - name: Test property update feedback prevention
+        run: |
+          set -euo pipefail
+          xcrun clang -fobjc-arc -fblocks -framework Foundation tests/property_update_tests.m -o "$RUNNER_TEMP/property-update-tests"
+          "$RUNNER_TEMP/property-update-tests"
       - name: Install RootHide Theos
         env:
           GITHUB_TOKEN: ${{ github.token }}
