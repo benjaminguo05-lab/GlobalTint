@@ -6,7 +6,7 @@ FINALPACKAGE := 1
 include $(THEOS)/makefiles/common.mk
 
 TWEAK_NAME := ChromaApps ChromaSystem
-ChromaApps_FILES := src/Apps.mm src/Runtime.mm src/Components.mm src/Private.mm shared/Config.m shared/Schema.m
+ChromaApps_FILES := src/Apps.mm src/Runtime.mm src/Components.mm src/Accent.mm src/Private.mm shared/Config.m shared/Schema.m
 ChromaApps_CFLAGS := -fobjc-arc -Wall -Wextra -Wno-unused-parameter -Ishared -Isrc
 ChromaApps_CCFLAGS := -std=c++17
 ChromaApps_FRAMEWORKS := UIKit Foundation CoreFoundation QuartzCore

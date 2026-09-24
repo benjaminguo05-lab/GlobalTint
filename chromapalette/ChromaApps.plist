@@ -9,6 +9,9 @@
 			<string>com.apple.Security</string>
 			<string>com.tigisoftware.Filza</string>
 			<string>com.tigisoftware.Filza64bit</string>
+			<string>com.apple.UIKit</string>
+			<string>com.exile90.icleanerpro</string>
+			<string>com.exile90.icleaner</string>
 		</array>
 	</dict>
 </dict>
