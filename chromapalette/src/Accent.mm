@@ -152,7 +152,13 @@ static BOOL PhotosListSymbol(UIImageView *image, UIImage *source) {
     UIView *parent=image.superview;
     for (NSUInteger depth=0; parent && depth<6; ++depth,parent=parent.superview)
         if ([parent isKindOfClass:UITableViewCell.class] || [parent isKindOfClass:UICollectionViewCell.class] ||
-            [NSStringFromClass(parent.class) isEqual:@"PUAlbumListCellContentView"]) return YES;
+            [NSStringFromClass(parent.class) isEqual:@"PUAlbumListCellContentView"]) {
+            // Only the leading category glyph, not trailing locks or badges.
+            if (parent.bounds.size.width<=0 || image.bounds.size.width>64 || image.bounds.size.height>64) return NO;
+            CGRect rect=[image convertRect:image.bounds toView:parent];
+            CGFloat fraction=CGRectGetMidX(rect)/parent.bounds.size.width;
+            return parent.effectiveUserInterfaceLayoutDirection==UIUserInterfaceLayoutDirectionRightToLeft ? fraction>0.75 : fraction<0.25;
+        }
     return NO;
 }
 
