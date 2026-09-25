@@ -89,7 +89,7 @@ NSDictionary *CPReadConfiguration(void) {
     NSString *bundle=NSBundle.mainBundle.bundleIdentifier ?: @"";
     if ([bundle.lowercaseString containsString:@"icleaner"]) {
         // Local, fixed-size status only. No screen contents or user configuration.
-        NSDictionary *status=@{@"version":@"0.1.7",@"bundle":bundle,@"date":NSDate.date,
+        NSDictionary *status=@{@"version":@"0.1.8",@"bundle":bundle,@"date":NSDate.date,
             @"pid":@(getpid()),@"uid":@(geteuid()),@"libSandy":@(CPPreparePreferences()),
             @"readable":@([raw isKindOfClass:NSDictionary.class]),@"direct":@(direct),@"source":readSource,
             @"enabled":config[@"enabled"],@"excluded":@([config[@"excludedApps"] containsObject:bundle])};
