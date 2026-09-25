@@ -38,11 +38,17 @@ def check_sources():
             groups[current].add(r.group(1))
     for group, role in re.findall(r'CPColor\(@"(\w+)",@"(\w+)"', src):
         assert role in groups.get(group, set()), (group, role)
-    assert {'navigation','toolbar','table','cell','switch','slider','status','controlcenter'} <= groups.keys()
+    assert {'navigation','toolbar','switch','slider','status','controlcenter'} <= groups.keys()
+    components=(ROOT / 'src/Components.mm').read_text(encoding='utf-8')
+    assert 'CPRegisterView(@"UITableView"' not in components
+    assert 'CPRegisterView(@"UITableViewCell"' not in components
+    assert 'CPRegisterView(@"UICollectionViewListCell"' not in components
     assert 'keyboard' not in groups
     assert groups['accent'] == {'color'}
     assert not {'notes','filza','messages'} & groups.keys()
-    assert 'index' in groups['table']
+    assert 'table' not in groups and 'cell' not in groups
+    assert entry['label'] == 'iOS全局改色'
+    assert info['CFBundleDisplayName'] == 'iOS全局改色'
     assert groups['switch'] == {'on','off'}
     assert groups['status'] == {'battery'}
     assert groups['controlcenter'] == {'active','selectedGlyph'}
