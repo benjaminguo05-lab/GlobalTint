@@ -27,6 +27,7 @@
     self.configuration=[CPReadConfiguration() mutableCopy];
     [self.tableView reloadData];
 }
+- (BOOL)unifiedAccent { return [self.group[@"key"] isEqual:@"accent"]; }
 - (void)save {
     if (!CPWriteConfiguration(self.configuration)) {
         UIAlertController *a=[UIAlertController alertControllerWithTitle:@"设置保存失败" message:@"请确认 libSandy 已安装且设置应用已启用插件注入，然后重新打开设置。" preferredStyle:UIAlertControllerStyleAlert];
@@ -38,7 +39,7 @@
     return self.group ? 1+[self.group[@"roles"] count] : 3;
 }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (self.group) return section==0 ? 1 : 3;
+    if (self.group) return section==0 ? 1 : ([self unifiedAccent] ? 2 : 3);
     return section==0 ? 2 : section==1 ? CPGroups().count : 4;
 }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
@@ -82,15 +83,15 @@
             cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
         }
     } else if (path.section==0) {
-        cell.textLabel.text=@"启用此组件";
+        cell.textLabel.text=[self unifiedAccent] ? @"统一更改蓝色强调色" : @"启用此组件";
         [self addSwitch:cell value:[self.configuration[@"groups"][self.group[@"key"]] boolValue] tag:0];
     } else {
         NSString *role=[self roleAtSection:path.section]; NSDictionary *r=self.configuration[@"roles"][role];
-        if (path.row==0) {
+        if (path.row==0 && ![self unifiedAccent]) {
             cell.textLabel.text=@"替换此项颜色";
             [self addSwitch:cell value:[r[@"enabled"] boolValue] tag:path.section];
         } else {
-            BOOL dark=(path.row==2); NSString *mode=dark ? @"dark" : @"light";
+            BOOL dark=(path.row==([self unifiedAccent] ? 1 : 2)); NSString *mode=dark ? @"dark" : @"light";
             cell.textLabel.text=dark ? @"深色模式：选择颜色" : @"浅色模式：选择颜色";
             cell.detailTextLabel.text=@"点击打开颜色选择器"; cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
             UIView *swatch=[[UIView alloc] initWithFrame:CGRectMake(0,0,30,30)];
@@ -141,12 +142,12 @@
 }
 - (void)diagnostics {
     NSDictionary *disk=CPReadConfiguration();
-    NSString *message=[NSString stringWithFormat:@"版本：0.1.4\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSString *message=[NSString stringWithFormat:@"版本：0.1.5\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
     NSDictionary *status=CPIcleanerStatus();
     if (status) {
         NSDateFormatter *format=[[NSDateFormatter alloc] init]; format.dateStyle=NSDateFormatterShortStyle; format.timeStyle=NSDateFormatterMediumStyle;
         NSString *time=[status[@"date"] isKindOfClass:NSDate.class] ? [format stringFromDate:status[@"date"]] : @"未知";
-        message=[message stringByAppendingFormat:@"\n\niCleaner 最近记录：%@\n插件版本：%@\n应用：%@\nUID：%@；libSandy：%@\n配置可读：%@；总开关：%@；被排除：%@\n请先重开 iCleaner，再检查时间是否更新。旧记录不能证明本次已加载。",time,status[@"version"],status[@"bundle"],status[@"uid"],status[@"libSandy"],[status[@"readable"] boolValue]?@"是":@"否",[status[@"enabled"] boolValue]?@"开":@"关",[status[@"excluded"] boolValue]?@"是":@"否"];
+        message=[message stringByAppendingFormat:@"\n\niCleaner 最近记录：%@\n插件版本：%@\n应用：%@\nUID：%@；libSandy：%@\n读取来源：%@\n配置可读：%@；总开关：%@；被排除：%@\n请先重开 iCleaner，再检查时间是否更新。旧记录不能证明本次已加载。",time,status[@"version"],status[@"bundle"],status[@"uid"],status[@"libSandy"],status[@"source"] ?: @"旧版未记录",[status[@"readable"] boolValue]?@"是":@"否",[status[@"enabled"] boolValue]?@"开":@"关",[status[@"excluded"] boolValue]?@"是":@"否"];
     } else message=[message stringByAppendingString:@"\n\niCleaner：尚无加载记录。请先打开 iCleaner，再返回此页检查；无记录也可能是记录文件无法写入。"];
     UIAlertController *a=[UIAlertController alertControllerWithTitle:@"配置读取诊断" message:message preferredStyle:UIAlertControllerStyleAlert];
     [a addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:a animated:YES completion:nil];
@@ -164,8 +165,8 @@
         }
         return;
     }
-    if (!path.section || !path.row) return;
-    self.editingRole=[self roleAtSection:path.section]; self.editingMode=(path.row==2) ? @"dark" : @"light";
+    if (!path.section || (!path.row && ![self unifiedAccent])) return;
+    self.editingRole=[self roleAtSection:path.section]; self.editingMode=(path.row==([self unifiedAccent] ? 1 : 2)) ? @"dark" : @"light";
     UIColorPickerViewController *picker=[[UIColorPickerViewController alloc] init]; picker.delegate=self; picker.supportsAlpha=YES;
     picker.selectedColor=CPParseHex(self.configuration[@"roles"][self.editingRole][self.editingMode]);
     [self presentViewController:picker animated:YES completion:nil];
