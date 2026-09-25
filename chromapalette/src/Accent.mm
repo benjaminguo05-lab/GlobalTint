@@ -96,9 +96,12 @@ static void Button(UIButton *button) {
 // not UIImage/UIColor factories, pixels, or generic drawing callbacks.
 static void InstallFilza(void) {
     if (![NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"]) return;
+    static NSMutableSet *installed;
+    if (!installed) installed=[NSMutableSet set];
     Class manager=NSClassFromString(@"ThemeManager");
     SEL mask=NSSelectorFromString(@"imageWithName:withMaskColor:");
-    if (CPObjectMethod(manager,mask,2)) {
+    if (![installed containsObject:@"imageMask"] && CPObjectMethod(manager,mask,2)) {
+        [installed addObject:@"imageMask"];
         __block IMP original=NULL;
         IMP hook=imp_implementationWithBlock(^id(id object,id name,id color) {
             UIColor *chosen=NSThread.isMainThread ? CPColor(@"accent",@"color",nil) : nil;
@@ -107,14 +110,16 @@ static void InstallFilza(void) {
         });
         MSHookMessageEx(manager,mask,hook,&original);
         CPRecordCapability(@"Filza.ThemeManager.imageMask",YES);
-    } else CPRecordCapability(@"Filza.ThemeManager.imageMask",NO);
+    } else if (![installed containsObject:@"imageMask"]) CPRecordCapability(@"Filza.ThemeManager.imageMask",NO);
     // QuickDialog supplies Filza's settings values (including entry fields).
     // Read-side mapping keeps disabled gray, red warnings and other colors intact.
     NSDictionary *getters=@{@"ThemeManager":@[@"systemColor",@"link"],
         @"QAppearance":@[@"valueColorEnabled",@"entryTextColorEnabled",@"actionColorEnabled"]};
     for (NSString *name in getters) for (NSString *selector in getters[name]) {
         Class cls=NSClassFromString(name); SEL sel=NSSelectorFromString(selector);
-        if (!CPObjectMethod(cls,sel,0)) continue;
+        NSString *key=[name stringByAppendingString:selector];
+        if ([installed containsObject:key] || !CPObjectMethod(cls,sel,0)) continue;
+        [installed addObject:key];
         __block IMP original=NULL;
         IMP hook=imp_implementationWithBlock(^id(id object) {
             id source=((id (*)(id,SEL))original)(object,sel);
@@ -126,11 +131,13 @@ static void InstallFilza(void) {
 // A read-only override covers buttons which resolve per-state title colors after
 // their configuration update. It never writes a view property or requests layout.
 static void InstallButtonTitleGetter(void) {
+    static BOOL installed=NO; if (installed) return;
     Class cls=UIButton.class; SEL sel=@selector(titleColorForState:);
     Method method=class_getInstanceMethod(cls,sel);
     char result[16]={}, argument[16]={};
     if (method) { method_getReturnType(method,result,sizeof(result)); method_getArgumentType(method,2,argument,sizeof(argument)); }
     if (!method || method_getNumberOfArguments(method)!=3 || result[0]!='@' || (argument[0]!='Q' && argument[0]!='q')) return;
+    installed=YES;
     __block IMP original=NULL;
     IMP hook=imp_implementationWithBlock(^id(UIButton *button,NSUInteger state) {
         id source=((id (*)(id,SEL,NSUInteger))original)(button,sel,state);
@@ -139,8 +146,96 @@ static void InstallButtonTitleGetter(void) {
     });
     MSHookMessageEx(cls,sel,hook,&original);
 }
+static BOOL PhotosListSymbol(UIImageView *image, UIImage *source) {
+    if (![NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobileslideshow"] || !source.isSymbolImage) return NO;
+    if (source.size.width>64 || source.size.height>64) return NO;
+    UIView *parent=image.superview;
+    for (NSUInteger depth=0; parent && depth<6; ++depth,parent=parent.superview)
+        if ([parent isKindOfClass:UITableViewCell.class] || [parent isKindOfClass:UICollectionViewCell.class] ||
+            [NSStringFromClass(parent.class) isEqual:@"PUAlbumListCellContentView"]) return YES;
+    return NO;
+}
+
+static void InstallPhotos(void) {
+    if (![NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobileslideshow"]) return;
+    CPRegisterView(@"PUAlbumListCellContentView",@[@"customImageView"],^(UIView *view) {
+        id custom=CPGetObject(view,@"customImageView");
+        if (![custom isKindOfClass:UIImageView.class]) return;
+        UIImageView *image=custom;
+        UIImage *source=CPSourceValue(image,@"image");
+        // This explicitly exposed category-icon slot is separate from the album
+        // photo stack. It can contain a raster glyph rather than an SF Symbol.
+        UIColor *color=Accent(image); UIColor *tint=CPSourceValue(image,@"tintColor");
+        BOOL small=source && source.size.width<=64 && source.size.height<=64;
+        CPApplyImageColor(image,small && (NativeAccent(tint,image) || [tint isEqual:color]) ? color : nil);
+    });
+}
+
+// UIColor adapters let the existing bounded, restorable property engine handle
+// only layers belonging to an App Store offer button. No CALayer hooks installed.
+@interface CPOfferLayerColors : NSObject
+@property(nonatomic,weak) CALayer *layer;
+@property(nonatomic,strong) UIColor *backgroundColor;
+@property(nonatomic,strong) UIColor *fillColor;
+@property(nonatomic,strong) UIColor *strokeColor;
+@end
+@implementation CPOfferLayerColors
+- (UIColor *)backgroundColor { CGColorRef c=self.layer.backgroundColor; return c ? [UIColor colorWithCGColor:c] : nil; }
+- (void)setBackgroundColor:(UIColor *)color { self.layer.backgroundColor=color.CGColor; }
+- (UIColor *)fillColor { CGColorRef c=[self.layer isKindOfClass:CAShapeLayer.class] ? ((CAShapeLayer *)self.layer).fillColor : nil; return c ? [UIColor colorWithCGColor:c] : nil; }
+- (void)setFillColor:(UIColor *)color { if ([self.layer isKindOfClass:CAShapeLayer.class]) ((CAShapeLayer *)self.layer).fillColor=color.CGColor; }
+- (UIColor *)strokeColor { CGColorRef c=[self.layer isKindOfClass:CAShapeLayer.class] ? ((CAShapeLayer *)self.layer).strokeColor : nil; return c ? [UIColor colorWithCGColor:c] : nil; }
+- (void)setStrokeColor:(UIColor *)color { if ([self.layer isKindOfClass:CAShapeLayer.class]) ((CAShapeLayer *)self.layer).strokeColor=color.CGColor; }
+@end
+static void Offer(UIView *view) {
+    UIColor *chosen=([view isKindOfClass:UIControl.class] && !((UIControl *)view).enabled) ? nil : Accent(view);
+    NSMutableArray *pending=[NSMutableArray arrayWithObject:@[view.layer,@0]];
+    static char layerColorsKey;
+    for (NSUInteger n=0; pending.count && n<48; ++n) {
+        NSArray *item=pending.lastObject; [pending removeLastObject];
+        CALayer *layer=item[0]; NSUInteger depth=[item[1] unsignedIntegerValue];
+        CPOfferLayerColors *adapter=objc_getAssociatedObject(layer,&layerColorsKey);
+        if (!adapter) { adapter=[CPOfferLayerColors new]; adapter.layer=layer; objc_setAssociatedObject(layer,&layerColorsKey,adapter,OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+        for (NSString *property in @[@"backgroundColor",@"fillColor",@"strokeColor"])
+            AccentProperty(adapter,property,chosen,view);
+        if (depth<3) for (CALayer *child in layer.sublayers) {
+            if (pending.count>=48) break;
+            [pending addObject:@[child,@(depth+1)]];
+        }
+    }
+}
+static void InstallStore(void) {
+    if (![NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.AppStore"]) return;
+    static NSMutableSet *installed;
+    if (!installed) installed=[NSMutableSet set];
+    Class theme=NSClassFromString(@"ASCOfferTheme");
+    for (NSString *name in @[@"titleBackgroundColor",@"titleTextColor",@"iconTintColor",@"progressColor"]) {
+        SEL sel=NSSelectorFromString(name);
+        if ([installed containsObject:name] || !CPObjectMethod(theme,sel,0)) continue;
+        [installed addObject:name]; __block IMP original=NULL;
+        IMP hook=imp_implementationWithBlock(^id(id object) {
+            id source=((id (*)(id,SEL))original)(object,sel);
+            return NSThread.isMainThread ? Mapped(source,CPColor(@"accent",@"color",nil),nil) : source;
+        });
+        MSHookMessageEx(theme,sel,hook,&original);
+        CPRecordCapability([@"ASCOfferTheme." stringByAppendingString:name],YES);
+    }
+    // Swift class names vary by app release. Discover only loaded offer-button
+    // classes in the AppStore modules and install the checked UIView adapter.
+    unsigned count=0; Class *classes=objc_copyClassList(&count);
+    for (unsigned i=0;i<count;++i) {
+        Class cls=classes[i]; NSString *name=NSStringFromClass(cls);
+        BOOL candidate=[name isEqual:@"ASCOfferButton"] ||
+            ([name containsString:@"AppStore"] && [name containsString:@"OfferButton"]);
+        if (!candidate || ![cls isSubclassOfClass:UIView.class]) continue;
+        CPRegisterView(name,@[@"backgroundColor",@"tintColor"],^(UIView *v) { Offer(v); });
+    }
+    free(classes);
+}
 void CPInstallAccent(void) {
     InstallFilza();
+    InstallStore();
+    InstallPhotos();
     InstallButtonTitleGetter();
     CPRegisterView(@"UIWindow",@[@"tintColor"],^(UIView *v) {
         AccentProperty(v,@"tintColor",Accent(v),v);
@@ -155,7 +250,7 @@ void CPInstallAccent(void) {
         if (source.renderingMode==UIImageRenderingModeAlwaysTemplate)
             AccentProperty(image,@"tintColor",Accent(image),image);
         else AccentProperty(image,@"tintColor",nil,image);
-        BOOL controlSymbol=source.isSymbolImage && [image.superview isKindOfClass:UIButton.class];
+        BOOL controlSymbol=source.isSymbolImage && ([image.superview isKindOfClass:UIButton.class] || PhotosListSymbol(image,source));
         UIColor *native=CPSourceValue(image,@"tintColor");
         static char symbolOwner;
         UIColor *common=Accent(image);
