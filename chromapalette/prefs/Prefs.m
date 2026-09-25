@@ -19,7 +19,7 @@
 }
 - (void)viewDidLoad {
     [super viewDidLoad];
-    self.title=self.group ? self.group[@"title"] : @"Chroma Palette";
+    self.title=self.group ? self.group[@"title"] : @"iOS全局改色";
     self.navigationItem.largeTitleDisplayMode=UINavigationItemLargeTitleDisplayModeNever;
 }
 - (void)viewWillAppear:(BOOL)animated {
@@ -142,7 +142,7 @@
 }
 - (void)diagnostics {
     NSDictionary *disk=CPReadConfiguration();
-    NSString *message=[NSString stringWithFormat:@"版本：0.1.5\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSString *message=[NSString stringWithFormat:@"版本：0.1.6\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
     NSDictionary *status=CPIcleanerStatus();
     if (status) {
         NSDateFormatter *format=[[NSDateFormatter alloc] init]; format.dateStyle=NSDateFormatterShortStyle; format.timeStyle=NSDateFormatterMediumStyle;
@@ -191,7 +191,7 @@
 @end
 @implementation CPPrefsRootController
 - (void)viewDidLoad {
-    [super viewDidLoad]; self.title=@"Chroma Palette";
+    [super viewDidLoad]; self.title=@"iOS全局改色";
     CPPrefsTable *child=[[CPPrefsTable alloc] init];
     [self addChildViewController:child]; child.view.frame=self.view.bounds; child.view.autoresizingMask=UIViewAutoresizingFlexibleWidth|UIViewAutoresizingFlexibleHeight;
     [self.view addSubview:child.view]; [child didMoveToParentViewController:self];
