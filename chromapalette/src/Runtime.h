@@ -30,3 +30,4 @@ FOUNDATION_EXPORT void CPInstallComponents(void);
 FOUNDATION_EXPORT void CPInstallPrivate(BOOL systemProcess);
 
 FOUNDATION_EXPORT void CPInstallAccent(void);
+

@@ -52,16 +52,21 @@ static void ControlCenter(void) {
 }
 void CPInstallPrivate(BOOL systemProcess) {
     Status();
+    if (!systemProcess) {
+        // Safari's address-field progress is not a UIProgressView. This named
+        // component exposes an object color setter; missing APIs are skipped.
+        CPRegisterView(@"_SFFluidProgressView",@[@"progressBarFillColor"],^(UIView *v) {
+            CPApplyColor(v,@"progressBarFillColor",CPColor(@"accent",@"color",v));
+        });
+        CPRegisterViewEvent(@"_SFFluidProgressView",@"_updateProgressBarImage");
+    }
     if (systemProcess) ControlCenter();
     else if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.MobileSMS"]) {
-        CPRegisterView(@"UIWindow",@[@"tintColor"],^(UIView *v) {
-            CPApplyColor(v,@"tintColor",CPColor(@"messages",@"accent",v));
-        });
         for (NSString *selector in @[@"appTintColor",@"darkAppTintColor",@"entryFieldButtonColor",@"entryFieldDarkStyleButtonColor",@"segmentedControlSelectionTintColor"])
-            CPRegisterColorGetter(@"CKUITheme",selector,@"messages",@"accent");
+            CPRegisterColorGetter(@"CKUITheme",selector,@"accent",@"color");
         CPRegisterView(@"CKConversationListStandardCell",@[],^(UIView *v) {
             id image=CPGetIvar(v,"_unreadIndicatorImageView");
-            if ([image isKindOfClass:UIImageView.class]) CPApplyImageColor(image,CPColor(@"messages",@"unread",v));
+            if ([image isKindOfClass:UIImageView.class]) CPApplyImageColor(image,CPColor(@"accent",@"color",v));
         });
     }
 }

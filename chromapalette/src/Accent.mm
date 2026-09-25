@@ -1,8 +1,9 @@
 #import "Runtime.h"
 #import "AttributedColors.h"
+#import "BluePolicy.h"
 
-// Match UIKit's named accent tokens only, on text/control properties. No global
-// UIColor/CGColor hook, RGB tolerance, pixel replacement, or layer-tree traversal.
+// Only concrete text/control properties are inspected. Compare named tokens and
+// their canonical sRGB blue values across color spaces; never scan image pixels.
 static BOOL NativeAccent(UIColor *color, UIView *view) {
     if (![color isKindOfClass:UIColor.class]) return NO;
     UITraitCollection *traits=view.traitCollection;
@@ -14,7 +15,8 @@ static BOOL NativeAccent(UIColor *color, UIView *view) {
                 [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark]])
             if ([resolved isEqual:[[token resolvedColorWithTraitCollection:t] colorWithAlphaComponent:1]]) return YES;
     }
-    return NO;
+    CGFloat r=0,g=0,b=0,a=0;
+    return [resolved getRed:&r green:&g blue:&b alpha:&a] && CPCanonicalBlue(r,g,b);
 }
 static BOOL InputOrAlert(UIView *view) {
     for (UIResponder *r=view; r; r=r.nextResponder) {
@@ -23,17 +25,11 @@ static BOOL InputOrAlert(UIView *view) {
     }
     return NO;
 }
-static UIColor *Accent(UIView *view, NSString *role) {
+static UIColor *Accent(UIView *view) {
     if (InputOrAlert(view)) return nil;
-    NSString *bundle=NSBundle.mainBundle.bundleIdentifier.lowercaseString;
-    if ([bundle hasPrefix:@"com.tigisoftware.filza"] && ![role isEqual:@"filled"])
-        return CPColor(@"filza",@"accent",view) ?: CPColor(@"accent",role,view);
-    for (UIView *p=view; p; p=p.superview) {
-        if ([p isKindOfClass:UINavigationBar.class]) return CPColor(@"navigation",@"items",view);
-        if ([p isKindOfClass:UIToolbar.class]) return CPColor(@"toolbar",@"items",view);
-        if ([p isKindOfClass:UITabBar.class]) return nil; // The bar owns selected/normal colors.
-    }
-    return CPColor(@"accent",role,view);
+    for (UIView *p=view; p; p=p.superview)
+        if ([p isKindOfClass:UITabBar.class]) return nil; // Selected/normal appearance owns this.
+    return CPColor(@"accent",@"color",view);
 }
 static UIColor *Mapped(UIColor *source, UIColor *chosen, UIView *view) {
     if (!chosen || !NativeAccent(source,view)) return source;
@@ -63,40 +59,20 @@ static void AccentProperty(id object, NSString *property, UIColor *color, UIView
     CPApplyColor(object,property,enabled ? Mapped(source,color,view) : nil);
 }
 static void Label(UILabel *label) {
-    UIColor *color=Accent(label,@"foreground");
-    // Respect the independently selected primary/secondary cell text colors.
-    for (UIView *p=label.superview; p; p=p.superview) {
-        if ([p isKindOfClass:UIButton.class]) break;
-        if ([p isKindOfClass:UITableViewCell.class]) {
-            UITableViewCell *cell=(UITableViewCell *)p;
-            if (!cell.contentConfiguration && label==cell.detailTextLabel)
-                color=CPColor(@"cell",@"detail",cell) ?: color;
-            else color=CPColor(@"cell",@"text",cell) ?: color;
-            break;
-        }
-        if ([p isKindOfClass:UICollectionViewListCell.class]) {
-            color=CPColor(@"cell",@"text",p) ?: color; break;
-        }
-    }
+    UIColor *color=Accent(label);
     AccentProperty(label,@"textColor",color,label);
     CPTransformValue(label,@"attributedText",color!=nil,color,^id(id source) { return Attributed(source,color,label); });
 }
 static void Button(UIButton *button) {
-    UIColor *foreground=button.enabled ? Accent(button,@"foreground") : nil;
-    UIColor *fill=button.enabled ? Accent(button,@"filled") : nil;
-    BOOL filza=[NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"];
+    UIColor *foreground=button.enabled ? Accent(button) : nil;
+    UIColor *fill=button.enabled ? Accent(button) : nil;
     AccentProperty(button,@"tintColor",foreground,button);
     AccentProperty(button,@"backgroundColor",fill,button);
     AccentProperty(button.titleLabel,@"textColor",foreground,button);
-    if (filza) {
-        CPApplyColor(button,@"tintColor",foreground);
-        CPApplyColor(button.titleLabel,@"textColor",foreground);
-        CPApplySymbolColor(button.imageView,foreground);
-    }
     CPTransform(button,@"configuration",foreground || fill,^id(id source) {
         if (![source isKindOfClass:UIButtonConfiguration.class]) return source;
         UIButtonConfiguration *copy=[source copy];
-        copy.baseForegroundColor=(filza && foreground) ? foreground : Mapped(copy.baseForegroundColor,foreground,button);
+        copy.baseForegroundColor=Mapped(copy.baseForegroundColor,foreground,button);
         copy.baseBackgroundColor=Mapped(copy.baseBackgroundColor,fill,button);
         copy.attributedTitle=Attributed(copy.attributedTitle,foreground,button);
         copy.attributedSubtitle=Attributed(copy.attributedSubtitle,foreground,button);
@@ -115,15 +91,27 @@ static void Button(UIButton *button) {
         return copy;
     });
 }
+// A read-only override covers buttons which resolve per-state title colors after
+// their configuration update. It never writes a view property or requests layout.
+static void InstallButtonTitleGetter(void) {
+    Class cls=UIButton.class; SEL sel=@selector(titleColorForState:);
+    Method method=class_getInstanceMethod(cls,sel);
+    char result[16]={}, argument[16]={};
+    if (method) { method_getReturnType(method,result,sizeof(result)); method_getArgumentType(method,2,argument,sizeof(argument)); }
+    if (!method || method_getNumberOfArguments(method)!=3 || result[0]!='@' || (argument[0]!='Q' && argument[0]!='q')) return;
+    __block IMP original=NULL;
+    IMP hook=imp_implementationWithBlock(^id(UIButton *button,NSUInteger state) {
+        id source=((id (*)(id,SEL,NSUInteger))original)(button,sel,state);
+        if (!NSThread.isMainThread || !button.enabled || (state & UIControlStateDisabled)) return source;
+        return Mapped(source,Accent(button),button);
+    });
+    MSHookMessageEx(cls,sel,hook,&original);
+}
 void CPInstallAccent(void) {
-    BOOL filza=[NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"];
-    if (filza) CPRegisterStateColorGetter(@"UIButton",@"titleColorForState:",@"filza",@"accent",@"accent");
-    // MobileSMS has its own UIWindow action, installed by Private.mm.
-    if (![NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.MobileSMS"])
-        CPRegisterView(@"UIWindow",@[@"tintColor"],^(UIView *v) {
-            if (filza) CPApplyColor(v,@"tintColor",CPColor(@"filza",@"accent",v));
-            else AccentProperty(v,@"tintColor",Accent(v,@"foreground"),v);
-        });
+    InstallButtonTitleGetter();
+    CPRegisterView(@"UIWindow",@[@"tintColor"],^(UIView *v) {
+        AccentProperty(v,@"tintColor",Accent(v),v);
+    });
     CPRegisterView(@"UILabel",@[@"textColor",@"attributedText"],^(UIView *v) { Label((UILabel *)v); });
     CPRegisterView(@"UIButton",@[@"tintColor",@"backgroundColor",@"configuration"],^(UIView *v) { Button((UIButton *)v); });
     CPRegisterViewEvent(@"UIButton",@"updateConfiguration");
@@ -132,15 +120,22 @@ void CPInstallAccent(void) {
         UIImage *source=CPSourceValue(image,@"image");
         // Only template images use tint. Keep multicolor symbols and actual artwork.
         if (source.renderingMode==UIImageRenderingModeAlwaysTemplate)
-            AccentProperty(image,@"tintColor",Accent(image,@"symbol"),image);
+            AccentProperty(image,@"tintColor",Accent(image),image);
         else AccentProperty(image,@"tintColor",nil,image);
+        BOOL controlSymbol=source.isSymbolImage && [image.superview isKindOfClass:UIButton.class];
+        UIColor *native=CPSourceValue(image,@"tintColor");
+        static char symbolOwner;
+        UIColor *common=Accent(image);
+        UIColor *chosen=controlSymbol && (NativeAccent(native,image) || [native isEqual:common]) ? common : nil;
+        if (chosen || [objc_getAssociatedObject(image,&symbolOwner) boolValue]) {
+            CPApplySymbolColor(image,chosen);
+            objc_setAssociatedObject(image,&symbolOwner,@(chosen!=nil),OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
     });
     CPRegisterView(@"UITextView",@[@"linkTextAttributes",@"tintColor"],^(UIView *v) {
-        UIColor *color=CPColor(@"accent",@"link",v);
-        if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"]) {
-            color=CPColor(@"notes",@"link",v) ?: color;
-            CPApplyColor(v,@"tintColor",color);
-        }
+        UIColor *color=CPColor(@"accent",@"color",v);
+        // The same common option owns detected links, including Notes numbers.
+        CPApplyColor(v,@"tintColor",color);
         CPTransformValue(v,@"linkTextAttributes",color!=nil,color,^id(id source) {
             NSMutableDictionary *attrs=[source isKindOfClass:NSDictionary.class] ? [source mutableCopy] : [NSMutableDictionary dictionary];
             attrs[NSForegroundColorAttributeName]=color; attrs[NSUnderlineColorAttributeName]=color;

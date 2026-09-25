@@ -1,14 +1,7 @@
 #import "Runtime.h"
 static void NotesSymbols(UIView *cell);
-static BOOL IsFilza(void) {
-    return [NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"];
-}
 static UIColor *ItemsColor(NSString *group, NSString *role, UIView *view) {
-    if (IsFilza()) {
-        UIColor *accent=CPColor(@"filza",@"accent",view);
-        if (accent) return accent;
-    }
-    return CPColor(group,role,view);
+    return CPColor(@"accent",@"color",view) ?: CPColor(group,role,view);
 }
 
 static NSMutableDictionary *TextAttributes(NSDictionary *source, UIColor *color) {
@@ -161,7 +154,7 @@ void CPInstallComponents(void) {
     CPRegisterView(@"UITableView",@[@"backgroundColor",@"separatorColor",@"sectionIndexColor"],^(UIView *v) {
         CPApplyColor(v,@"backgroundColor",CPColor(@"table",@"background",v));
         CPApplyColor(v,@"separatorColor",CPColor(@"table",@"separator",v));
-        CPApplyColor(v,@"sectionIndexColor",CPColor(@"table",@"index",v));
+        CPApplyColor(v,@"sectionIndexColor",ItemsColor(@"table",@"index",v));
     });
     CPRegisterView(@"UITableViewCell",@[@"backgroundColor",@"tintColor",@"selectedBackgroundView",@"backgroundConfiguration",@"contentConfiguration"],^(UIView *v) { Cell((UITableViewCell *)v); });
     CPRegisterView(@"UICollectionViewListCell",@[@"tintColor",@"contentConfiguration"],^(UIView *v) { CollectionCell((UICollectionViewListCell *)v); });
@@ -197,7 +190,7 @@ void CPInstallComponents(void) {
         CPApplyColor(v,@"thumbTintColor",CPColor(@"slider",@"thumb",v));
     });
     CPRegisterView(@"UIProgressView",@[@"progressTintColor",@"trackTintColor"],^(UIView *v) {
-        CPApplyColor(v,@"progressTintColor",CPColor(@"progress",@"fill",v));
+        CPApplyColor(v,@"progressTintColor",ItemsColor(@"progress",@"fill",v));
         CPApplyColor(v,@"trackTintColor",CPColor(@"progress",@"track",v));
     });
 }

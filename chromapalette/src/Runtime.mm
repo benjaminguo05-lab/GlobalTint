@@ -136,10 +136,9 @@ void CPRegisterStateColorGetter(NSString *className, NSString *selector, NSStrin
     IMP hook=imp_implementationWithBlock(^id(UIView *view,NSUInteger state) {
         id source=((id (*)(id,SEL,NSUInteger))original)(view,sel,state);
         if (!NSThread.isMainThread || (state & UIControlStateDisabled)) return source;
-        if ([className isEqual:@"UITabBarButton"] && (state & UIControlStateSelected) &&
-            [NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"]) {
-            UIColor *filza=CPColor(@"filza",@"accent",view);
-            if (filza) return filza;
+        if ([className isEqual:@"UITabBarButton"] && (state & UIControlStateSelected)) {
+            UIColor *accent=CPColor(@"accent",@"color",view);
+            if (accent) return accent;
         }
         return CPColor(group,(state & UIControlStateSelected) ? selected : normal,view) ?: source;
     });
@@ -321,6 +320,7 @@ static void Refresh(void) {
     for (UIView *view in targets.allObjects) {
         CPViewAction action=ActionForView(view);
         if (action) Apply(view,action);
+        [view setNeedsDisplay];
     }
     ReconcileWindows();
 }
