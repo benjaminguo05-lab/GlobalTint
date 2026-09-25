@@ -13,7 +13,7 @@
 		<key>isController</key>
 		<true/>
 		<key>label</key>
-		<string>Chroma Palette</string>
+		<string>iOS全局改色</string>
 		<key>icon</key>
 		<string>Spectrum.png</string>
 	</dict>
