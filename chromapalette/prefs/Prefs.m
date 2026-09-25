@@ -1,6 +1,7 @@
 #import <Preferences/PSViewController.h>
 #import <QuartzCore/QuartzCore.h>
 #import "Config.h"
+#import "AppList.h"
 
 @interface CPDemoController : UITableViewController
 @end
@@ -121,18 +122,7 @@
 - (void)colorPickerViewControllerDidSelectColor:(UIColorPickerViewController *)controller { [self setColor:controller.selectedColor]; }
 - (void)colorPickerViewControllerDidFinish:(UIColorPickerViewController *)controller { [self setColor:controller.selectedColor]; }
 - (void)editExclusions {
-    UIAlertController *a=[UIAlertController alertControllerWithTitle:@"不改色的应用" message:@"输入应用标识，多个用逗号分隔。例如 com.apple.mobilesafari。此列表不会开启或关闭 Relaxin 的注入。" preferredStyle:UIAlertControllerStyleAlert];
-    [a addTextFieldWithConfigurationHandler:^(UITextField *f) { f.text=[self.configuration[@"excludedApps"] componentsJoinedByString:@","]; f.autocapitalizationType=UITextAutocapitalizationTypeNone; f.autocorrectionType=UITextAutocorrectionTypeNo; }];
-    [a addAction:[UIAlertAction actionWithTitle:@"取消" style:UIAlertActionStyleCancel handler:nil]];
-    [a addAction:[UIAlertAction actionWithTitle:@"保存" style:UIAlertActionStyleDefault handler:^(UIAlertAction *action) {
-        NSMutableArray *ids=[NSMutableArray array];
-        for (NSString *part in [a.textFields.firstObject.text componentsSeparatedByCharactersInSet:[NSCharacterSet characterSetWithCharactersInString:@",，\n "]]) {
-            NSString *item=[part stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-            if (item.length) [ids addObject:item];
-        }
-        self.configuration[@"excludedApps"]=ids; [self save];
-    }]];
-    [self presentViewController:a animated:YES completion:nil];
+    [self.navigationController pushViewController:[[CPPrefsAppList alloc] init] animated:YES];
 }
 - (void)reset {
     UIAlertController *a=[UIAlertController alertControllerWithTitle:@"恢复默认设置" message:@"这会关闭改色并清除本插件的自选颜色和排除列表。" preferredStyle:UIAlertControllerStyleAlert];
@@ -142,7 +132,7 @@
 }
 - (void)diagnostics {
     NSDictionary *disk=CPReadConfiguration();
-    NSString *message=[NSString stringWithFormat:@"版本：0.1.6\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSString *message=[NSString stringWithFormat:@"版本：0.1.7\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
     NSDictionary *status=CPIcleanerStatus();
     if (status) {
         NSDateFormatter *format=[[NSDateFormatter alloc] init]; format.dateStyle=NSDateFormatterShortStyle; format.timeStyle=NSDateFormatterMediumStyle;

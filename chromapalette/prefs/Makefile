@@ -1,6 +1,6 @@
 include $(THEOS)/makefiles/common.mk
 BUNDLE_NAME := ChromaPrefs
-ChromaPrefs_FILES := Prefs.m ../shared/Config.m ../shared/Schema.m
+ChromaPrefs_FILES := Prefs.m AppList.m ../shared/Config.m ../shared/Schema.m
 ChromaPrefs_RESOURCE_FILES := Info.plist Spectrum.png
 ChromaPrefs_CFLAGS := -fobjc-arc -Wall -Wextra -Wno-unused-parameter -I../shared
 ChromaPrefs_FRAMEWORKS := UIKit Foundation CoreFoundation QuartzCore
