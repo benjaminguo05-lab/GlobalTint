@@ -1,34 +1,27 @@
-# Chroma Palette 0.1.5
+# iOS全局改色 0.1.6
 
-适用于 iPhone 15 Pro Max / iOS 17.1.1 / Relaxin（RootHide）的独立组件配色插件。
+适用于 iPhone 15 Pro Max / iOS 17.1.1 / Relaxin（RootHide）。原 Chroma Palette 的升级版本；包标识和配置域保留，设置入口及页面名称改为“iOS全局改色”，继续使用 Spectrum 图标。
 
-## 本版修改
+## 本次修改
 
-- “通用蓝色强调色”提供一个开关，统一浅色/深色颜色选择和透明度。移除信息、Filza、备忘录的单独强调色页面；旧配置优先继承原按钮文字强调色，保留总开关及应用排除名单。
-- 具体 UILabel、UIButton、UIImageView 属性识别系统蓝色语义值及浅深色标准 sRGB 值（允许一个字节的取整差异）。按钮增加只读的状态文字色适配，控件内符号图像补色；不处理任意照片像素、快捷指令彩色卡片和网页内容。
-- 导航/工具栏按钮、标签栏选中项、列表索引、普通进度填充优先跟随统一强调色。关闭统一开关后恢复各组件自己的设置。备忘录链接和信息未读标记也使用统一颜色。
-- Safari 地址栏加载条按 `_SFFluidProgressView.progressBarFillColor` 单独适配；接口不存在或签名不符时跳过。
-- iCleaner 的诊断已证实插件加载于 UID 0，但配置不可读。本版先读取 `jbroot()` 转换后的 mobile 配置路径，再尝试原路径及偏好服务；增加明确 mobile 用户的回退。诊断显示读取来源，补充真实 bundle 标识 `com.ivanobilenchi.icleaner`。
-- 不引入 UIView/CALayer 的通用绘制钩子。继续保留主线程合并、属性原值恢复、每属性冲突熔断和有限次数的启动补色。
+- 完全删除“列表视图”“列表项”两组设置及其背景、文字、分隔线、选中背景、图标适配。升级后忽略旧列表配色键。通用强调色仍可处理列表内的蓝色操作文字，不再将普通列表整块换色。
+- 移除旧列表代码后，不再由关闭的列表组件对标签属性执行原色恢复，避免覆盖通用强调色。
+- 对 Filza 4.0.1-4 官方包作静态检查，确认 `ShortenSortButton.updateLabels` 和 `ButtonsGroup.initWithFrame:` 将固定蓝色传入 `ThemeManager.imageWithName:withMaskColor:` 生成图标。仅在 Filza 中拦截该明确方法的蓝色遮罩参数，在其生成图像前应用通用强调色；不扫描照片或修改全局图像工厂。
+- Filza 设置页使用 QuickDialog，补充 `QAppearance` 的启用值、输入文字、操作色及 `ThemeManager` 系统/链接色的只读适配。只替换匹配的蓝色，保留其他原色。
+- Filza 的导航、工具栏、底部标签栏及强调色按系统浅深色选择，避免局部深色 trait 把浅色界面的底栏涂为深色。外观变化时使旧转换失效，但不重置冲突写入限额。
 
-共有 11 组、29 个颜色项；统一强调色组仅有一个颜色项（浅/深模式），不再逐 App 设置。首次安装总开关关闭；从 schema 2 的旧版升级保留有效配置。
+现有 9 组、20 个颜色项。通用强调色保持一个开关和浅/深两套颜色选择；没有恢复按 App 的设置页。保留 0.1.5 的 iCleaner mobile 配置路径修复和 Safari 加载条适配。
 
-## 使用
+## 安装和复测
 
-GitHub Actions 工作流 `.github/workflows/chromapalette.yml` 构建原生 RootHide 安装包，架构标识 `iphoneos-arm64e`，包含 arm64/arm64e 二进制。
+从本次 GitHub Actions 的 `ChromaPalette-RootHide-运行编号` 产物解压，安装 `com.benja.chromapalette_0.1.6_iphoneos-arm64e.deb`。按安装管理器提示重新载入 SpringBoard，彻底关闭后重新打开 Filza。原包标识和产物前缀用于兼容升级；设置中显示“iOS全局改色”。
 
-下载本次 `ChromaPalette-RootHide-运行编号` 产物，解压并安装 `com.benja.chromapalette_0.1.5_iphoneos-arm64e.deb`。按安装管理器提示重新载入 SpringBoard，在设置中打开“通用蓝色强调色”、选择颜色，然后彻底关闭并重开相关 App。依赖 PreferenceLoader、libSandy 和注入框架。
+确认设置入口名称、已移除两组列表选项；检查 Filza 设置页右侧蓝色值、排序上下箭头及右侧折叠箭头。箭头可能在初始化时缓存，选择新颜色后重开 Filza。分别在系统浅色和深色下检查底栏是否选用对应配色。若自己在浅色颜色项中选了深色，底栏仍会按所选颜色显示。
 
-iCleaner 重开后，“配置读取诊断”中的最新记录应显示 0.1.5、配置可读“是”、总开关“开”，以及实际读取来源。时间必须对应本次打开，旧记录不代表当前已加载。诊断只写本地加载状态，不采集页面内容。
+## 验证与边界
 
-## 保留和边界
+CI 校验设置与颜色引用、已删除的列表适配、设置图标及安装包；运行配置迁移、标准蓝色识别、属性恢复及 10000 次重复输入的冲突回归，再编译并检查 arm64/arm64e 架构。构建通过不能替代真机结果。
 
-保留导航栏、工具栏、列表、列表项、开关轨道、滑块、标签栏、进度条、电池填充和控制中心开启色。键盘、开关圆形滑钮、其他状态栏颜色、控制中心普通模块/亮度音量填充以及 HEX 输入入口均不恢复。设置图标继续使用用户提供的 Spectrum.png。
+不增加 UIView/CALayer 通用绘制钩子。Filza 适配在应用标识和 Objective-C 方法签名检查通过后才安装，其他应用不注册这些 Filza 方法。
 
-通用表示共用设置和标准控件适配，并非能改写所有自绘或已烘焙在图片中的蓝色。Filza 小箭头、快捷指令按钮、Safari 私有接口和 iCleaner 读取路径需本次真机复测。健康图表、照片、彩色卡片及红色警告颜色不通过全局像素替换处理。
-
-## 验证
-
-本地检查设置组、颜色引用、已删除选项及资源。CI 运行实际配置迁移、配置文件载荷识别、标准蓝色识别和属性更新回归，包含重复 10000 次输入的冲突熔断、原值恢复和链接属性保留；随后编译并校验包内文件及两种 CPU 架构。编译成功不等于真机界面已验证。
-
-路径依据：[Relaxin cfprefsd 路径重定向](https://github.com/owngoal-dev/Relaxin/blob/main/Vendor/Dopamine/BaseBin/roothidehooks/cfprefsd.m)、[RootHide 接口](https://github.com/roothide/Developer/blob/main/interface.md)。Safari 控件依据：[运行时头文件](https://github.com/nst/iOS-Runtime-Headers/blob/master/Frameworks/SafariServices.framework/_SFFluidProgressView.h)；头文件不等于用户手机实时导出。
+静态检查使用 [TIGI 官方下载目录](https://www.tigisoftware.com/download/filza.php) 的 Filza 4.0.1-4 安装包；该安装包及反汇编仅留在本地排查目录，不随插件发布。用户手机上的主题插件可能另行改写控件，仍需真机确认。
