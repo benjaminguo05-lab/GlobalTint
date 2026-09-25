@@ -1,5 +1,6 @@
 #import "AppList.h"
 #import "Config.h"
+#import <QuartzCore/QuartzCore.h>
 #import <objc/message.h>
 #import <objc/runtime.h>
 
