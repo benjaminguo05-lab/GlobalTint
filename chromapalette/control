@@ -1,6 +1,6 @@
 Package: com.benja.chromapalette
 Name: iOS全局改色
-Version: 0.1.6
+Version: 0.1.7
 Architecture: iphoneos-arm64e
 Description: Independent component colors for Relaxin / RootHide. Experimental iOS 17 private adapters.
 Maintainer: Chroma Palette
