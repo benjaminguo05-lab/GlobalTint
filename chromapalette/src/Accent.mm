@@ -1,4 +1,5 @@
 #import "Runtime.h"
+#import "FilzaArrowPolicy.h"
 #import "AttributedColors.h"
 #import "BluePolicy.h"
 
@@ -91,11 +92,44 @@ static void Button(UIButton *button) {
         return copy;
     });
 }
-// Filza 4.0.1-4 creates sorting arrows via ThemeManager's explicit image-mask
-// API with a hard-coded #007AFF. Replace its color argument before rasterization,
-// not UIImage/UIColor factories, pixels, or generic drawing callbacks.
+// Filza's arrows are cached raster images. Reconcile the two known owning
+// views as well as their explicit update events, even if generation predated us.
+static void FilzaArrow(id candidate, UIColor *color) {
+    if (![candidate isKindOfClass:UIImageView.class]) return;
+    CPApplyImageColor(candidate,color);
+}
+static BOOL FilzaEnabled(UIView *view) {
+    SEL sel=NSSelectorFromString(@"enabled"); Method method=class_getInstanceMethod(view.class,sel);
+    char type[16]={};
+    if (!method || method_getNumberOfArguments(method)!=2) return YES;
+    method_getReturnType(method,type,sizeof(type));
+    if (type[0]!='B' && type[0]!='c') return YES;
+    return ((BOOL (*)(id,SEL))objc_msgSend)(view,sel);
+}
+static void InstallFilzaArrows(void) {
+    CPRegisterView(@"ShortenSortButton",@[@"sortLabels"],^(UIView *view) {
+        id labels=CPGetObject(view,@"sortLabels");
+        if (![labels isKindOfClass:NSArray.class]) return;
+        UIColor *chosen=Accent(view);
+        for (NSUInteger i=0;i<MIN((NSUInteger)[labels count],(NSUInteger)16);++i) {
+            id item=labels[i], label=CPGetObject(item,@"label");
+            UIColor *source=[label isKindOfClass:UILabel.class] ? CPSourceValue(label,@"textColor") : nil;
+            // Filza sets only the active sort label to #007AFF. Inactive labels
+            // use ThemeManager.text and their no_sort glyph must remain gray.
+            BOOL active=NativeAccent(source,view) || (chosen && [source isEqual:chosen]);
+            FilzaArrow(CPGetObject(item,@"imageView"),active ? chosen : nil);
+        }
+    });
+    for (NSString *event in @[@"updateLabels",@"updateSubviews",@"themeUpdate"])
+        CPRegisterViewEvent(@"ShortenSortButton",event);
+    CPRegisterView(@"ButtonsGroup",@[@"arrowImageView"],^(UIView *view) {
+        FilzaArrow(CPGetObject(view,@"arrowImageView"),FilzaEnabled(view) ? Accent(view) : nil);
+    });
+    CPRegisterViewEvent(@"ButtonsGroup",@"themeUpdate");
+}
 static void InstallFilza(void) {
     if (![NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"]) return;
+    InstallFilzaArrows();
     static NSMutableSet *installed;
     if (!installed) installed=[NSMutableSet set];
     Class manager=NSClassFromString(@"ThemeManager");
@@ -105,7 +139,7 @@ static void InstallFilza(void) {
         __block IMP original=NULL;
         IMP hook=imp_implementationWithBlock(^id(id object,id name,id color) {
             UIColor *chosen=NSThread.isMainThread ? CPColor(@"accent",@"color",nil) : nil;
-            id desired=Mapped(color,chosen,nil);
+            id desired=CPFilzaLiveArrowAsset(name) ? color : Mapped(color,chosen,nil);
             return ((id (*)(id,SEL,id,id))original)(object,mask,name,desired);
         });
         MSHookMessageEx(manager,mask,hook,&original);
