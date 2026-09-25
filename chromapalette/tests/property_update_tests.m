@@ -2,6 +2,7 @@
 #import "../src/AttributedColors.h"
 #import "../shared/ConfigurationMigration.h"
 #import "../src/BluePolicy.h"
+#import "../src/FilzaArrowPolicy.h"
 #include <assert.h>
 #include <stdio.h>
 
@@ -19,6 +20,31 @@ static CopyValue *Value(NSInteger number) {
 }
 int main(void) {
     @autoreleasepool {
+        for (NSString *name in @[@"arrow_up",@"arrow_down",@"e_return",@"e_expand"]) assert(CPFilzaLiveArrowAsset(name));
+        for (id other in @[@"no_sort",@"folder",@"arrow_other",@42,NSNull.null]) assert(!CPFilzaLiveArrowAsset(other));
+        assert(!CPFilzaLiveArrowAsset(nil));
+        // Arrow image was generated and cached before hooks became active.
+        // A live-view pass must color it without re-entering the image factory.
+        NSMutableDictionary *arrowRecords=[NSMutableDictionary dictionary];
+        id blueArrow=[NSObject new], grayArrow=[NSObject new], greenArrow=[NSObject new], redArrow=[NSObject new];
+        __block id arrow=blueArrow; __block NSUInteger arrowWrites=0;
+        id (^readArrow)(void)=^id { return arrow; };
+        void (^writeArrow)(id)=^(id value) { arrow=value; ++arrowWrites; };
+        for (NSUInteger pass=0;pass<10000;++pass) {
+            CPPropertyConcreteInput(arrowRecords[@"image"],arrow,@"green");
+            CPUpdateProperty(arrowRecords,@"image",YES,1,1,0.1,readArrow,writeArrow,^id(id source) { assert(source==blueArrow); return greenArrow; });
+        }
+        assert(arrow==greenArrow && arrowWrites==1);
+        CPPropertyConcreteInput(arrowRecords[@"image"],arrow,@"red");
+        CPUpdateProperty(arrowRecords,@"image",YES,2,1,2,readArrow,writeArrow,^id(id source) { assert(source==blueArrow); return redArrow; });
+        assert(arrow==redArrow);
+        CPUpdateProperty(arrowRecords,@"image",NO,3,1,3,readArrow,writeArrow,^id(id source) { return source; });
+        assert(arrow==blueArrow);
+        // Changing the sort column replaces the old arrow with a gray idle glyph.
+        CPUpdateProperty(arrowRecords,@"image",YES,4,1,4,readArrow,writeArrow,^id(id source) { return greenArrow; });
+        arrow=grayArrow; CPPropertyConcreteInput(arrowRecords[@"image"],arrow,nil);
+        CPUpdateProperty(arrowRecords,@"image",NO,4,1,4.1,readArrow,writeArrow,^id(id source) { return source; });
+        assert(arrow==grayArrow && arrowRecords.count==0);
         NSDictionary *oldRole=@{@"enabled":@YES,@"light":@"#168A60",@"dark":@"#5CDBAA"};
         NSDictionary *old=@{@"enabled":@YES,@"schema":@2,@"groups":@{@"accent":@YES},@"roles":@{@"accent.foreground":oldRole}};
         NSDictionary *wrapper=@{@"configuration":old};
