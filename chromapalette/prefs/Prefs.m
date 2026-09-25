@@ -132,7 +132,7 @@
 }
 - (void)diagnostics {
     NSDictionary *disk=CPReadConfiguration();
-    NSString *message=[NSString stringWithFormat:@"版本：0.1.7\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSString *message=[NSString stringWithFormat:@"版本：0.1.8\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
     NSDictionary *status=CPIcleanerStatus();
     if (status) {
         NSDateFormatter *format=[[NSDateFormatter alloc] init]; format.dateStyle=NSDateFormatterShortStyle; format.timeStyle=NSDateFormatterMediumStyle;
