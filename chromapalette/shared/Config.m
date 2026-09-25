@@ -3,6 +3,7 @@
 #import <dlfcn.h>
 #import <unistd.h>
 #import <sys/stat.h>
+#import "ConfigurationMigration.h"
 
 static NSString * const IcleanerStatusPath=@"/var/mobile/Library/Preferences/com.benja.chromapalette.icleaner-status.plist";
 NSDictionary *CPIcleanerStatus(void) {
@@ -25,6 +26,7 @@ int CPPreparePreferences(void) {
 NSDictionary *CPNormalizeConfiguration(id input) {
     NSDictionary *defaults = CPDefaults();
     if (![input isKindOfClass:NSDictionary.class]) return defaults;
+    input=CPMigrateAccent(input);
     NSMutableDictionary *out = [defaults mutableCopy];
     for (NSString *k in @[@"enabled", @"systemEnabled"])
         if ([input[k] isKindOfClass:NSNumber.class]) out[k] = @([input[k] boolValue]);
@@ -61,20 +63,35 @@ NSDictionary *CPReadConfiguration(void) {
     // Root-launched jailbreak apps must read the same mobile-owned preferences.
     // Read the explicit file first; the suite remains a fallback if direct access
     // is unavailable. Never create a second root user's configuration.
-    NSDictionary *file=[NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:CPPreferencePath] error:nil];
-    id raw=file[@"configuration"];
+    NSString *readSource=@"none";
+    id raw=nil;
+    // Relaxin's cfprefsd redirects third-party preference files through jbroot.
+    // UID 0 must read mobile's redirected file, not its own current-user suite.
+    for (NSString *path in @[jbroot(CPPreferencePath),CPPreferencePath]) {
+        NSDictionary *file=[NSDictionary dictionaryWithContentsOfURL:[NSURL fileURLWithPath:path] error:nil];
+        raw=CPConfigurationPayload(file);
+        if (raw) { readSource=[path isEqual:CPPreferencePath] ? @"原路径" : @"RootHide mobile 文件"; break; }
+    }
     BOOL direct=[raw isKindOfClass:NSDictionary.class];
     if (!direct) {
         NSUserDefaults *store=[[NSUserDefaults alloc] initWithSuiteName:CPPreferencePath];
-        [store synchronize]; raw=[store objectForKey:@"configuration"];
+        [store synchronize]; raw=CPConfigurationPayload([store objectForKey:@"configuration"]);
+        if ([raw isKindOfClass:NSDictionary.class]) readSource=@"偏好服务";
+    }
+    if (![raw isKindOfClass:NSDictionary.class] && geteuid()==0) {
+        // Explicit mobile user, so a root app never selects root's empty domain.
+        CFPreferencesSynchronize(CFSTR("com.benja.chromapalette"),CFSTR("mobile"),kCFPreferencesAnyHost);
+        raw=CFBridgingRelease(CFPreferencesCopyValue(CFSTR("configuration"),CFSTR("com.benja.chromapalette"),CFSTR("mobile"),kCFPreferencesAnyHost));
+        raw=CPConfigurationPayload(raw);
+        if (raw) readSource=@"mobile 偏好服务";
     }
     NSDictionary *config=CPNormalizeConfiguration(raw);
     NSString *bundle=NSBundle.mainBundle.bundleIdentifier ?: @"";
     if ([bundle.lowercaseString containsString:@"icleaner"]) {
         // Local, fixed-size status only. No screen contents or user configuration.
-        NSDictionary *status=@{@"version":@"0.1.4",@"bundle":bundle,@"date":NSDate.date,
+        NSDictionary *status=@{@"version":@"0.1.5",@"bundle":bundle,@"date":NSDate.date,
             @"pid":@(getpid()),@"uid":@(geteuid()),@"libSandy":@(CPPreparePreferences()),
-            @"readable":@([raw isKindOfClass:NSDictionary.class]),@"direct":@(direct),
+            @"readable":@([raw isKindOfClass:NSDictionary.class]),@"direct":@(direct),@"source":readSource,
             @"enabled":config[@"enabled"],@"excluded":@([config[@"excludedApps"] containsObject:bundle])};
         if ([status writeToURL:[NSURL fileURLWithPath:IcleanerStatusPath] error:nil]) {
             chmod(IcleanerStatusPath.fileSystemRepresentation,0644);
