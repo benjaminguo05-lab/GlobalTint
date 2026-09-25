@@ -1,5 +1,4 @@
 #import "Runtime.h"
-static void NotesSymbols(UIView *cell);
 static UIColor *ItemsColor(NSString *group, NSString *role, UIView *view) {
     return CPColor(@"accent",@"color",view) ?: CPColor(group,role,view);
 }
@@ -69,97 +68,18 @@ static void Tabbar(UITabBar *bar) {
             CPTransform(item,p,active,^id(id source) { return TabAppearance(source,bar); });
     }
 }
-static NSAttributedString *ListText(NSAttributedString *source, UIColor *color) {
-    if (!source || !color || !source.length) return source;
-    NSMutableAttributedString *copy=[source mutableCopy];
-    [copy addAttribute:NSForegroundColorAttributeName value:color range:NSMakeRange(0,copy.length)];
-    return copy;
-}
-static void Cell(UITableViewCell *cell) {
-    UIColor *bg=CPColor(@"cell",@"background",cell), *text=CPColor(@"cell",@"text",cell), *detail=CPColor(@"cell",@"detail",cell);
-    CPApplyColor(cell,@"backgroundColor",bg);
-    CPApplyColor(cell,@"tintColor",CPColor(@"cell",@"accessory",cell));
-    CPTransform(cell,@"backgroundConfiguration",bg != nil,^id(id source) {
-        UIBackgroundConfiguration *a=[source copy] ?: [UIBackgroundConfiguration listPlainCellConfiguration];
-        a.backgroundColor=bg; a.backgroundColorTransformer=nil;
-        return a;
-    });
-    UIColor *selected=CPColor(@"cell",@"selected",cell);
-    CPTransform(cell,@"selectedBackgroundView",selected != nil,^id(id source) {
-        UIView *v=[[UIView alloc] initWithFrame:cell.bounds]; v.backgroundColor=selected; return v;
-    });
-    UIColor *icon=CPColor(@"cell",@"icon",cell);
-    id content=cell.contentConfiguration;
-    if (!content || [content isKindOfClass:UIListContentConfiguration.class]) {
-        CPTransform(cell,@"contentConfiguration",(text || detail || icon) && content != nil,^id(id source) {
-            if (![source isKindOfClass:UIListContentConfiguration.class]) return source;
-            UIListContentConfiguration *a=[source copy];
-            if (text) { a.textProperties.color=text; a.textProperties.colorTransformer=nil; a.attributedText=ListText(a.attributedText,text); }
-            if (detail) { a.secondaryTextProperties.color=detail; a.secondaryTextProperties.colorTransformer=nil; a.secondaryAttributedText=ListText(a.secondaryAttributedText,detail); }
-            if (icon) { a.imageProperties.tintColor=icon; a.imageProperties.tintColorTransformer=nil; }
-            return a;
-        });
-        if (!content) {
-            CPApplyColor(cell.textLabel,@"textColor",text);
-            CPApplyColor(cell.detailTextLabel,@"textColor",detail);
-            CPApplyColor(cell.imageView,@"tintColor",icon);
-            // Preserve photos and arbitrary raster artwork in ordinary list cells.
-            CPApplySymbolColor(cell.imageView,icon);
-        }
-    }
-    if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"]) NotesSymbols(cell);
-}
-static void CollectionCell(UICollectionViewListCell *cell) {
-    UIColor *icon=CPColor(@"cell",@"icon",cell), *text=CPColor(@"cell",@"text",cell), *detail=CPColor(@"cell",@"detail",cell);
-    CPApplyColor(cell,@"tintColor",CPColor(@"cell",@"accessory",cell));
-    CPTransform(cell,@"contentConfiguration",icon || text || detail,^id(id source) {
-        if (![source isKindOfClass:UIListContentConfiguration.class]) return source;
-        UIListContentConfiguration *a=[source copy];
-        if (icon) { a.imageProperties.tintColor=icon; a.imageProperties.tintColorTransformer=nil; }
-        if (text) { a.textProperties.color=text; a.textProperties.colorTransformer=nil; a.attributedText=ListText(a.attributedText,text); }
-        if (detail) { a.secondaryTextProperties.color=detail; a.secondaryTextProperties.colorTransformer=nil; a.secondaryAttributedText=ListText(a.secondaryAttributedText,detail); }
-        return a;
-    });
-    if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"]) NotesSymbols(cell);
-}
-static void NotesSymbols(UIView *cell) {
-    // Notes uses collection cells and hierarchical symbols instead of UITableViewCell.imageView.
-    // Bound the walk to this cell. Never inspect or modify note text/attachment data.
-    NSMutableArray<UIView *> *pending=[NSMutableArray arrayWithArray:cell.subviews];
-    UIColor *color=CPColor(@"cell",@"icon",cell);
-    for (NSUInteger visited=0; pending.count && visited<64; ++visited) {
-        UIView *view=pending.lastObject; [pending removeLastObject];
-        if ([view isKindOfClass:UIImageView.class]) {
-            UIImageView *icon=(UIImageView *)view;
-            CPApplySymbolColor(icon,color);
-        }
-        if (![view isKindOfClass:UICollectionViewCell.class] && ![view isKindOfClass:UITableViewCell.class])
-            [pending addObjectsFromArray:view.subviews];
-    }
-}
 void CPInstallComponents(void) {
     for (NSString *selector in @[@"_buttonTintColorForState:",@"_contentTintColorForState:",@"iconColorForState:",@"defaultColorForState:"])
         CPRegisterTabColorGetter(selector);
     CPRegisterColorGetter(@"UISwitchModernVisualElement",@"_effectiveOnTintColor",@"switch",@"on");
     CPRegisterColorGetter(@"UISwitchModernVisualElement",@"_effectiveTintColor",@"switch",@"off");
     CPInstallAccent();
-    CPRegisterViewEvent(@"UITableViewCell",@"updateConfiguration");
-    CPRegisterViewEvent(@"UICollectionViewListCell",@"updateConfiguration");
     CPTrackProperties(@"UINavigationItem",@[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"]);
     CPTrackProperties(@"UITabBarItem",@[@"standardAppearance",@"scrollEdgeAppearance"]);
     CPTrackProperties(@"UIBarButtonItem",@[@"tintColor"]);
     CPRegisterView(@"UINavigationBar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"],^(UIView *v) { Navigation((UINavigationBar *)v); });
     CPRegisterView(@"UIToolbar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"],^(UIView *v) { Toolbar((UIToolbar *)v); });
     CPRegisterView(@"UITabBar",@[@"tintColor",@"unselectedItemTintColor",@"standardAppearance",@"scrollEdgeAppearance"],^(UIView *v) { Tabbar((UITabBar *)v); });
-    CPRegisterView(@"UITableView",@[@"backgroundColor",@"separatorColor",@"sectionIndexColor"],^(UIView *v) {
-        CPApplyColor(v,@"backgroundColor",CPColor(@"table",@"background",v));
-        CPApplyColor(v,@"separatorColor",CPColor(@"table",@"separator",v));
-        CPApplyColor(v,@"sectionIndexColor",ItemsColor(@"table",@"index",v));
-    });
-    CPRegisterView(@"UITableViewCell",@[@"backgroundColor",@"tintColor",@"selectedBackgroundView",@"backgroundConfiguration",@"contentConfiguration"],^(UIView *v) { Cell((UITableViewCell *)v); });
-    CPRegisterView(@"UICollectionViewListCell",@[@"tintColor",@"contentConfiguration"],^(UIView *v) { CollectionCell((UICollectionViewListCell *)v); });
-    if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.mobilenotes"])
-        CPRegisterView(@"UICollectionViewCell",@[],^(UIView *v) { NotesSymbols(v); });
     if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.MobileSMS"])
         CPRegisterView(@"CKNavigationBar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance"],^(UIView *v) { Navigation((UINavigationBar *)v); });
     CPRegisterView(@"UISwitch",@[@"onTintColor",@"tintColor",@"backgroundColor"],^(UIView *v) {

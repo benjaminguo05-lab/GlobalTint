@@ -6,7 +6,7 @@
 // their canonical sRGB blue values across color spaces; never scan image pixels.
 static BOOL NativeAccent(UIColor *color, UIView *view) {
     if (![color isKindOfClass:UIColor.class]) return NO;
-    UITraitCollection *traits=view.traitCollection;
+    UITraitCollection *traits=view ? view.traitCollection : UIScreen.mainScreen.traitCollection;
     UIColor *resolved=[[color resolvedColorWithTraitCollection:traits] colorWithAlphaComponent:1];
     for (UIColor *token in @[UIColor.systemBlueColor,UIColor.linkColor]) {
         if ([color isEqual:token]) return YES;
@@ -32,8 +32,8 @@ static UIColor *Accent(UIView *view) {
     return CPColor(@"accent",@"color",view);
 }
 static UIColor *Mapped(UIColor *source, UIColor *chosen, UIView *view) {
-    if (!chosen || !NativeAccent(source,view)) return source;
-    CGFloat alpha=CGColorGetAlpha([source resolvedColorWithTraitCollection:view.traitCollection].CGColor);
+    if (!chosen || [source isEqual:chosen] || !NativeAccent(source,view)) return source;
+    CGFloat alpha=CGColorGetAlpha([source resolvedColorWithTraitCollection:(view ? view.traitCollection : UIScreen.mainScreen.traitCollection)].CGColor);
     CGFloat chosenAlpha=CGColorGetAlpha(chosen.CGColor);
     return [chosen colorWithAlphaComponent:alpha*chosenAlpha];
 }
@@ -91,6 +91,38 @@ static void Button(UIButton *button) {
         return copy;
     });
 }
+// Filza 4.0.1-4 creates sorting arrows via ThemeManager's explicit image-mask
+// API with a hard-coded #007AFF. Replace its color argument before rasterization,
+// not UIImage/UIColor factories, pixels, or generic drawing callbacks.
+static void InstallFilza(void) {
+    if (![NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"]) return;
+    Class manager=NSClassFromString(@"ThemeManager");
+    SEL mask=NSSelectorFromString(@"imageWithName:withMaskColor:");
+    if (CPObjectMethod(manager,mask,2)) {
+        __block IMP original=NULL;
+        IMP hook=imp_implementationWithBlock(^id(id object,id name,id color) {
+            UIColor *chosen=NSThread.isMainThread ? CPColor(@"accent",@"color",nil) : nil;
+            id desired=Mapped(color,chosen,nil);
+            return ((id (*)(id,SEL,id,id))original)(object,mask,name,desired);
+        });
+        MSHookMessageEx(manager,mask,hook,&original);
+        CPRecordCapability(@"Filza.ThemeManager.imageMask",YES);
+    } else CPRecordCapability(@"Filza.ThemeManager.imageMask",NO);
+    // QuickDialog supplies Filza's settings values (including entry fields).
+    // Read-side mapping keeps disabled gray, red warnings and other colors intact.
+    NSDictionary *getters=@{@"ThemeManager":@[@"systemColor",@"link"],
+        @"QAppearance":@[@"valueColorEnabled",@"entryTextColorEnabled",@"actionColorEnabled"]};
+    for (NSString *name in getters) for (NSString *selector in getters[name]) {
+        Class cls=NSClassFromString(name); SEL sel=NSSelectorFromString(selector);
+        if (!CPObjectMethod(cls,sel,0)) continue;
+        __block IMP original=NULL;
+        IMP hook=imp_implementationWithBlock(^id(id object) {
+            id source=((id (*)(id,SEL))original)(object,sel);
+            return NSThread.isMainThread ? Mapped(source,CPColor(@"accent",@"color",nil),nil) : source;
+        });
+        MSHookMessageEx(cls,sel,hook,&original);
+    }
+}
 // A read-only override covers buttons which resolve per-state title colors after
 // their configuration update. It never writes a view property or requests layout.
 static void InstallButtonTitleGetter(void) {
@@ -108,6 +140,7 @@ static void InstallButtonTitleGetter(void) {
     MSHookMessageEx(cls,sel,hook,&original);
 }
 void CPInstallAccent(void) {
+    InstallFilza();
     InstallButtonTitleGetter();
     CPRegisterView(@"UIWindow",@[@"tintColor"],^(UIView *v) {
         AccentProperty(v,@"tintColor",Accent(v),v);

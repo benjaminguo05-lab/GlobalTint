@@ -174,7 +174,9 @@ UIColor *CPColor(NSString *group, NSString *role, UIView *view) {
     // CC modules can force dark local traits even while the phone is in light mode.
     // Select the user's system palette, rather than that module's material style.
     NSInteger style=traits.userInterfaceStyle;
-    if ([group isEqual:@"controlcenter"]) {
+    BOOL filzaBar=[NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"] &&
+        ([@[@"navigation",@"toolbar",@"tabbar",@"accent"] containsObject:group]);
+    if ([group isEqual:@"controlcenter"] || filzaBar) {
         NSInteger screenStyle=UIScreen.mainScreen.traitCollection.userInterfaceStyle;
         if (screenStyle!=UIUserInterfaceStyleUnspecified) style=screenStyle;
     }
@@ -278,6 +280,7 @@ void CPRegisterView(NSString *className, NSArray<NSString *> *properties, CPView
             ((void (*)(id,SEL,id))oldTrait)(view,trait,previous);
             // A forced-dark CC view may receive changed environment traits while
             // its own userInterfaceStyle stays dark. Reconcile without a layout loop.
+            CPInvalidatePropertyRecords(Records(view,NO));
             QueueApply(view);
         });
         MSHookMessageEx(cls,trait,newTrait,&oldTrait);
