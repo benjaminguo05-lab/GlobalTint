@@ -1,5 +1,5 @@
 """Validate deployment contracts; CI additionally compiles and inspects both CPU slices."""
-import argparse, io, pathlib, plistlib, re, tarfile
+import argparse, io, pathlib, plistlib, re, tarfile, struct
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 
@@ -15,7 +15,9 @@ def check_sources():
         entry = plistlib.load(f)['entry']
     assert entry['bundle'] == 'ChromaPrefs'
     assert entry['icon'] == 'Spectrum.png'
-    assert (ROOT / 'prefs/Spectrum.png').read_bytes().startswith(b'\x89PNG\r\n\x1a\n')
+    icon=(ROOT / 'prefs/Spectrum.png').read_bytes()
+    assert icon.startswith(b'\x89PNG\r\n\x1a\n')
+    assert struct.unpack('>II',icon[16:24]) == (30,30)
     prefs = (ROOT / 'prefs/Prefs.m').read_text(encoding='utf-8')
     assert '@interface ' + entry['detail'] in prefs
     info=plistlib.loads((ROOT / 'prefs/Info.plist').read_bytes())
