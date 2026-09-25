@@ -1,5 +1,7 @@
 #import "../src/PropertyUpdate.h"
 #import "../src/AttributedColors.h"
+#import "../shared/ConfigurationMigration.h"
+#import "../src/BluePolicy.h"
 #include <assert.h>
 #include <stdio.h>
 
@@ -17,6 +19,35 @@ static CopyValue *Value(NSInteger number) {
 }
 int main(void) {
     @autoreleasepool {
+        NSDictionary *oldRole=@{@"enabled":@YES,@"light":@"#168A60",@"dark":@"#5CDBAA"};
+        NSDictionary *old=@{@"enabled":@YES,@"schema":@2,@"groups":@{@"accent":@YES},@"roles":@{@"accent.foreground":oldRole}};
+        NSDictionary *wrapper=@{@"configuration":old};
+        assert(CPConfigurationPayload(wrapper)==old);
+        assert(CPConfigurationPayload(old)==old);
+        assert(CPConfigurationPayload(@"invalid")==nil);
+        assert(CPConfigurationPayload(@{@"configuration":@"invalid"})==nil);
+        NSDictionary *merged=CPMigrateAccent(old);
+        assert([merged[@"roles"][@"accent.color"] isEqual:oldRole]);
+        assert([merged[@"groups"][@"accent"] boolValue]);
+        assert([CPMigrateAccent(merged) isEqual:merged]);
+        NSMutableDictionary *off=[old mutableCopy]; off[@"groups"]=@{@"accent":@NO};
+        assert(![CPMigrateAccent(off)[@"groups"][@"accent"] boolValue]);
+        off[@"roles"]=@{@"accent.color":@"invalid"};
+        assert([CPMigrateAccent(off) isKindOfClass:NSDictionary.class]);
+        NSDictionary *disabledRole=@{@"enabled":@NO,@"light":@"#123456",@"dark":@"#654321"};
+        off[@"roles"]=@{@"filza.accent":disabledRole}; off[@"groups"]=@{@"filza":@YES};
+        NSDictionary *fallback=CPMigrateAccent(off);
+        assert(![fallback[@"groups"][@"accent"] boolValue]);
+        assert([fallback[@"roles"][@"accent.color"][@"light"] isEqual:@"#123456"]);
+        assert([fallback[@"roles"][@"accent.color"][@"enabled"] boolValue]);
+        assert(CPCanonicalBlue(0,122.0/255,1));
+        assert(CPCanonicalBlue(10.0/255,132.0/255,1));
+        assert(!CPCanonicalBlue(0,1,1));
+        assert(!CPCanonicalBlue(1,0,0));
+        assert(!CPCanonicalBlue(1,1,1));
+        assert(!CPCanonicalBlue(0.5,0.5,0.5));
+        assert(!CPCanonicalBlue(0.1,0.4,0.9));
+
         NSMutableAttributedString *rich=[[NSMutableAttributedString alloc] initWithString:@"action danger white"];
         [rich addAttributes:@{@"foreground":@"blue",@"underline":@"blue",@"link":@"test://original",@"font":@"unchanged"} range:NSMakeRange(0,6)];
         [rich addAttribute:@"foreground" value:@"red" range:NSMakeRange(7,6)];
@@ -126,7 +157,7 @@ int main(void) {
         assert(linkWrites==1 && [links[@"custom"] isEqual:@"preserved"] && [links[@"underline"] isEqual:@1]);
         CPUpdateProperty(records,@"links",NO,1,1,0.2,readLinks,writeLinks,paintLinks);
         assert([links isEqual:baseline]);
-        puts("Property update regressions passed: copy identity, host updates, traits, restoration, concrete colors/state, lifecycle budgets, link attributes, conflict breaker.");
+        puts("Migration, canonical-blue and property update regressions passed: copy identity, host updates, traits, restoration, concrete colors/state, lifecycle budgets, link attributes, conflict breaker.");
     }
     return 0;
 }

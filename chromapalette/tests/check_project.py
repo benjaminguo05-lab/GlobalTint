@@ -40,7 +40,8 @@ def check_sources():
         assert role in groups.get(group, set()), (group, role)
     assert {'navigation','toolbar','table','cell','switch','slider','status','controlcenter'} <= groups.keys()
     assert 'keyboard' not in groups
-    assert groups['accent'] == {'foreground','symbol','filled','link'}
+    assert groups['accent'] == {'color'}
+    assert not {'notes','filza','messages'} & groups.keys()
     assert 'index' in groups['table']
     assert groups['switch'] == {'on','off'}
     assert groups['status'] == {'battery'}
