@@ -19,20 +19,6 @@ static BOOL NativeAccent(UIColor *color, UIView *view) {
     CGFloat r=0,g=0,b=0,a=0;
     return [resolved getRed:&r green:&g blue:&b alpha:&a] && CPCanonicalBlue(r,g,b);
 }
-static BOOL NativeWarm(UIColor *color, UIView *view) {
-    if (![color isKindOfClass:UIColor.class]) return NO;
-    UITraitCollection *traits=view ? view.traitCollection : UIScreen.mainScreen.traitCollection;
-    UIColor *resolved=[[color resolvedColorWithTraitCollection:traits] colorWithAlphaComponent:1];
-    for (UIColor *token in @[UIColor.systemYellowColor,UIColor.systemOrangeColor]) {
-        if ([color isEqual:token]) return YES;
-        for (UITraitCollection *t in @[traits,
-                [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleLight],
-                [UITraitCollection traitCollectionWithUserInterfaceStyle:UIUserInterfaceStyleDark]])
-            if ([resolved isEqual:[[token resolvedColorWithTraitCollection:t] colorWithAlphaComponent:1]]) return YES;
-    }
-    CGFloat h=0,s=0,b=0,a=0;
-    return [resolved getHue:&h saturation:&s brightness:&b alpha:&a] && h>=0.075 && h<=0.18 && s>=0.55 && b>=0.55;
-}
 static BOOL InputOrAlert(UIView *view) {
     for (UIResponder *r=view; r; r=r.nextResponder) {
         if ([r isKindOfClass:UITextView.class] || [r isKindOfClass:UITextField.class] ||
@@ -52,15 +38,11 @@ static UIColor *Mapped(UIColor *source, UIColor *chosen, UIView *view) {
     CGFloat chosenAlpha=CGColorGetAlpha(chosen.CGColor);
     return [chosen colorWithAlphaComponent:alpha*chosenAlpha];
 }
-static UIColor *MappedSemantic(UIColor *source, UIView *view) {
-    UIColor *accent=Accent(view), *warm=CPColor(@"warm",@"color",view);
-    if (accent && (NativeAccent(source,view) || [source isEqual:accent])) return Mapped(source,accent,view);
-    if (warm && (NativeWarm(source,view) || [source isEqual:warm])) {
-        if ([source isEqual:warm]) return source;
-        CGFloat alpha=CGColorGetAlpha([source resolvedColorWithTraitCollection:(view ? view.traitCollection : UIScreen.mainScreen.traitCollection)].CGColor);
-        return [warm colorWithAlphaComponent:alpha*CGColorGetAlpha(warm.CGColor)];
-    }
-    return source;
+static NSAttributedString *Attributed(NSAttributedString *source, UIColor *color, UIView *view) {
+    if (!color) return source;
+    return CPMapAttributedColors(source,@[NSForegroundColorAttributeName,NSUnderlineColorAttributeName],^id(id value) {
+        return Mapped(value,color,view);
+    });
 }
 static void AccentProperty(id object, NSString *property, UIColor *color, UIView *view) {
     if (!object) return;
@@ -77,46 +59,24 @@ static void AccentProperty(id object, NSString *property, UIColor *color, UIView
     if (enabled) [owned addObject:property]; else [owned removeObject:property];
     CPApplyColor(object,property,enabled ? Mapped(source,color,view) : nil);
 }
-static void SemanticProperty(id object, NSString *property, UIView *view) {
-    if (!object) return;
-    static char semanticPropertiesKey;
-    NSMutableSet *owned=objc_getAssociatedObject(object,&semanticPropertiesKey);
-    UIColor *source=CPSourceValue(object,property), *mapped=MappedSemantic(source,view);
-    BOOL enabled=[mapped isKindOfClass:UIColor.class] && ![mapped isEqual:source];
-    UIColor *accent=Accent(view), *warm=CPColor(@"warm",@"color",view);
-    if ((accent && [source isEqual:accent]) || (warm && [source isEqual:warm])) enabled=YES;
-    if (!enabled && ![owned containsObject:property]) return;
-    if (!owned) {
-        owned=[NSMutableSet set];
-        objc_setAssociatedObject(object,&semanticPropertiesKey,owned,OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-    if (enabled) [owned addObject:property]; else [owned removeObject:property];
-    CPApplyColor(object,property,enabled ? mapped : nil);
-}
-static NSAttributedString *SemanticAttributed(NSAttributedString *source, UIView *view) {
-    if (!CPColor(@"accent",@"color",view) && !CPColor(@"warm",@"color",view)) return source;
-    return CPMapAttributedColors(source,@[NSForegroundColorAttributeName,NSUnderlineColorAttributeName],^id(id value) {
-        return MappedSemantic(value,view);
-    });
-}
 static void Label(UILabel *label) {
-    UIColor *accent=Accent(label), *warm=CPColor(@"warm",@"color",label);
-    SemanticProperty(label,@"textColor",label);
-    CPTransformValue(label,@"attributedText",accent || warm,@[accent ?: NSNull.null,warm ?: NSNull.null],^id(id source) { return SemanticAttributed(source,label); });
+    UIColor *color=Accent(label);
+    AccentProperty(label,@"textColor",color,label);
+    CPTransformValue(label,@"attributedText",color!=nil,color,^id(id source) { return Attributed(source,color,label); });
 }
 static void Button(UIButton *button) {
     UIColor *foreground=button.enabled ? Accent(button) : nil;
-    UIColor *warm=button.enabled ? CPColor(@"warm",@"color",button) : nil;
-    SemanticProperty(button,@"tintColor",button);
-    SemanticProperty(button,@"backgroundColor",button);
-    SemanticProperty(button.titleLabel,@"textColor",button);
-    CPTransform(button,@"configuration",foreground || warm,^id(id source) {
+    UIColor *fill=button.enabled ? Accent(button) : nil;
+    AccentProperty(button,@"tintColor",foreground,button);
+    AccentProperty(button,@"backgroundColor",fill,button);
+    AccentProperty(button.titleLabel,@"textColor",foreground,button);
+    CPTransform(button,@"configuration",foreground || fill,^id(id source) {
         if (![source isKindOfClass:UIButtonConfiguration.class]) return source;
         UIButtonConfiguration *copy=[source copy];
-        copy.baseForegroundColor=MappedSemantic(copy.baseForegroundColor,button);
-        copy.baseBackgroundColor=MappedSemantic(copy.baseBackgroundColor,button);
-        copy.attributedTitle=SemanticAttributed(copy.attributedTitle,button);
-        copy.attributedSubtitle=SemanticAttributed(copy.attributedSubtitle,button);
+        copy.baseForegroundColor=Mapped(copy.baseForegroundColor,foreground,button);
+        copy.baseBackgroundColor=Mapped(copy.baseBackgroundColor,fill,button);
+        copy.attributedTitle=Attributed(copy.attributedTitle,foreground,button);
+        copy.attributedSubtitle=Attributed(copy.attributedSubtitle,foreground,button);
         // Retain white text on filled buttons, red destructive actions, and host
         // transformers. Only the transformer's returned native accent is mapped.
         UIConfigurationColorTransformer old=copy.imageColorTransformer;
@@ -124,10 +84,10 @@ static void Button(UIButton *button) {
         copy.imageColorTransformer=^UIColor *(UIColor *input) {
             UIColor *original=old ? old(input) : input;
             UIButton *live=weakButton;
-            return live ? MappedSemantic(original,live) : original;
+            return live ? Mapped(original,foreground,live) : original;
         };
         UIBackgroundConfiguration *background=[copy.background copy];
-        background.backgroundColor=MappedSemantic(background.backgroundColor,button);
+        background.backgroundColor=Mapped(background.backgroundColor,fill,button);
         copy.background=background;
         return copy;
     });
@@ -216,7 +176,7 @@ static void InstallButtonTitleGetter(void) {
     IMP hook=imp_implementationWithBlock(^id(UIButton *button,NSUInteger state) {
         id source=((id (*)(id,SEL,NSUInteger))original)(button,sel,state);
         if (!NSThread.isMainThread || !button.enabled || (state & UIControlStateDisabled)) return source;
-        return MappedSemantic(source,button);
+        return Mapped(source,Accent(button),button);
     });
     MSHookMessageEx(cls,sel,hook,&original);
 }
@@ -313,8 +273,6 @@ static void InstallStore(void) {
     free(classes);
 }
 void CPInstallAccent(void) {
-    CPRegisterClassColorGetter(@"UIColor",@"systemYellowColor",@"warm",@"color");
-    CPRegisterClassColorGetter(@"UIColor",@"systemOrangeColor",@"warm",@"color");
     InstallFilza();
     InstallStore();
     InstallPhotos();
@@ -330,7 +288,7 @@ void CPInstallAccent(void) {
         UIImage *source=CPSourceValue(image,@"image");
         // Only template images use tint. Keep multicolor symbols and actual artwork.
         if (source.renderingMode==UIImageRenderingModeAlwaysTemplate)
-            SemanticProperty(image,@"tintColor",image);
+            AccentProperty(image,@"tintColor",Accent(image),image);
         else AccentProperty(image,@"tintColor",nil,image);
         BOOL controlSymbol=source.isSymbolImage && ([image.superview isKindOfClass:UIButton.class] || PhotosListSymbol(image,source));
         UIColor *native=CPSourceValue(image,@"tintColor");

@@ -8,12 +8,11 @@ static void Status(void) {
 static void Badge(void) {
     for (NSString *name in @[@"SBIconBadgeView",@"SBHIconBadgeView"]) {
         CPRegisterClassColorGetter(name,@"badgeBackgroundColor",@"badge",@"background");
-        CPRegisterView(name,@[@"backgroundColor"],^(UIView *v) {
+        CPRegisterView(name,@[],^(UIView *v) {
             UIColor *color=CPColor(@"badge",@"background",v);
-            CPApplyColor(v,@"backgroundColor",color);
             for (id background in @[CPGetObject(v,@"backgroundView") ?: NSNull.null,
                     CPGetIvar(v,"_backgroundView") ?: NSNull.null])
-                if ([background isKindOfClass:UIView.class]) CPApplyColor(background,@"backgroundColor",color);
+                if ([background isKindOfClass:UIImageView.class]) CPApplyImageColor(background,color);
         });
         for (NSString *event in @[@"configureForIcon:",@"updateBadgeBackground",@"_updateBackground"])
             CPRegisterViewEvent(name,event);

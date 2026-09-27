@@ -133,7 +133,9 @@ static void Tabbar(UITabBar *bar) {
     CPApplyColor(bar,@"tintColor",ItemsColor(@"tabbar",@"selected",bar));
     CPApplyColor(bar,@"unselectedItemTintColor",CPColor(@"tabbar",@"normal",bar));
     BOOL active=CPColor(@"tabbar",@"background",bar) || ItemsColor(@"tabbar",@"selected",bar) || CPColor(@"tabbar",@"normal",bar);
-    UIColor *badge=CPColor(@"badge",@"background",bar);
+    NSString *bundle=NSBundle.mainBundle.bundleIdentifier;
+    BOOL sileo=[bundle isEqual:@"org.coolstar.SileoStore"] || [bundle isEqual:@"com.amywhile.sileo"];
+    UIColor *badge=sileo ? [UIColor colorWithRed:0xF3/255.0 green:0x6F/255.0 blue:0x43/255.0 alpha:1] : CPColor(@"badge",@"background",bar);
     for (UITabBarItem *item in bar.items) CPApplyColor(item,@"badgeColor",badge);
     for (NSString *p in @[@"standardAppearance",@"scrollEdgeAppearance"]) {
         CPTransform(bar,p,active,^id(id source) { return TabAppearance(source,bar); });
