@@ -50,7 +50,7 @@
 }
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
     NSString *key=CPGroups()[path.section][@"key"];
-    return [@{@"navigation":@190,@"toolbar":@90,@"accent":@150,@"warm":@120,@"switch":@120,
+    return [@{@"navigation":@190,@"toolbar":@90,@"accent":@150,@"switch":@120,
         @"slider":@90,@"tabbar":@100,@"progress":@80,@"status":@110,@"badge":@110,@"controlcenter":@130}[key] doubleValue];
 }
 - (void)buttonTapped:(UIButton *)button {
@@ -92,17 +92,6 @@
         UILabel *link=[[UILabel alloc] initWithFrame:CGRectMake(16,52,width-32,30)];
         link.attributedText=[[NSAttributedString alloc] initWithString:@"链接文字与下划线示例" attributes:@{NSForegroundColorAttributeName:color,NSUnderlineStyleAttributeName:@1}];
         [sample addSubview:link];
-    } else if ([key isEqual:@"warm"]) {
-        UIColor *color=[self color:key role:@"color" fallback:UIColor.systemOrangeColor];
-        for (NSInteger i=0;i<3;i++) {
-            UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem]; button.userInteractionEnabled=NO;
-            button.frame=CGRectMake(16+i*68,6,56,56); button.layer.cornerRadius=28; button.backgroundColor=color;
-            [button setTitle:@[@"÷",@"×",@"+"][i] forState:UIControlStateNormal]; [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
-            button.titleLabel.font=[UIFont systemFontOfSize:28 weight:UIFontWeightMedium]; [sample addSubview:button];
-        }
-        UIImageView *folder=[[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"folder.fill"]];
-        folder.frame=CGRectMake(width-62,12,44,38); folder.tintColor=color; [sample addSubview:folder];
-        UILabel *label=[[UILabel alloc] initWithFrame:CGRectMake(16,68,width-32,24)]; label.text=@"计算器运算键与备忘录文件夹"; label.font=[UIFont systemFontOfSize:13]; [sample addSubview:label];
     } else if ([key isEqual:@"switch"]) {
         for (NSInteger i=0;i<2;i++) {
             UILabel *label=[[UILabel alloc] initWithFrame:CGRectMake(16,i*44,width-100,34)]; label.text=i ? @"关闭轨道" : @"开启轨道"; [sample addSubview:label];
