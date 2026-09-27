@@ -40,13 +40,15 @@ def check_sources():
             groups[current].add(r.group(1))
     for group, role in re.findall(r'CPColor\(@"(\w+)",@"(\w+)"', src):
         assert role in groups.get(group, set()), (group, role)
-    assert {'navigation','toolbar','switch','slider','status','controlcenter'} <= groups.keys()
+    assert {'navigation','toolbar','accent','warm','switch','slider','status','badge','controlcenter'} <= groups.keys()
     components=(ROOT / 'src/Components.mm').read_text(encoding='utf-8')
     assert 'CPRegisterView(@"UITableView"' not in components
     assert 'CPRegisterView(@"UITableViewCell"' not in components
     assert 'CPRegisterView(@"UICollectionViewListCell"' not in components
     assert 'keyboard' not in groups
     assert groups['accent'] == {'color'}
+    assert groups['warm'] == {'color'}
+    assert groups['badge'] == {'background'}
     assert not {'notes','filza','messages'} & groups.keys()
     assert 'table' not in groups and 'cell' not in groups
     assert entry['label'] == 'iOS全局改色'
@@ -56,6 +58,9 @@ def check_sources():
     assert groups['controlcenter'] == {'active','selectedGlyph'}
     assert 'editHex' not in prefs and '杈撳叆 HEX' not in prefs
     assert not re.search(r'UIKB|UIKeyboard', (ROOT / 'src/Private.mm').read_text())
+    assert 'systemRedColor' not in (ROOT / 'src/Accent.mm').read_text(), 'do not globally replace destructive semantic red'
+    assert 'SBIconBadgeView' in (ROOT / 'src/Private.mm').read_text()
+    assert 'UIDocumentPickerViewController' in prefs and 'UIActivityViewController' in prefs
     print(f'Project contracts OK: {len(groups)} component groups, {sum(map(len, groups.values()))} color roles.')
 
 def ar_members(data):
