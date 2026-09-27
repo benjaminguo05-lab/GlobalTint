@@ -3,8 +3,7 @@
 #import "Config.h"
 #import "AppList.h"
 
-@interface CPDemoController : UITableViewController
-@end
+#import "Preview.h"
 
 @interface CPPrefsTable : UITableViewController <UIColorPickerViewControllerDelegate>
 @property(nonatomic,strong) NSMutableDictionary *configuration;
@@ -132,7 +131,7 @@
 }
 - (void)diagnostics {
     NSDictionary *disk=CPReadConfiguration();
-    NSString *message=[NSString stringWithFormat:@"版本：0.1.8\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSString *message=[NSString stringWithFormat:@"版本：0.1.9\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
     NSDictionary *status=CPIcleanerStatus();
     if (status) {
         NSDateFormatter *format=[[NSDateFormatter alloc] init]; format.dateStyle=NSDateFormatterShortStyle; format.timeStyle=NSDateFormatterMediumStyle;
@@ -142,7 +141,7 @@
     UIAlertController *a=[UIAlertController alertControllerWithTitle:@"配置读取诊断" message:message preferredStyle:UIAlertControllerStyleAlert];
     [a addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]]; [self presentViewController:a animated:YES completion:nil];
 }
-- (void)preview { [self.navigationController pushViewController:[[CPDemoController alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES]; }
+- (void)preview { [self.navigationController pushViewController:[[CPPrefsPreview alloc] initWithStyle:UITableViewStyleInsetGrouped] animated:YES]; }
 - (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)path {
     [tableView deselectRowAtIndexPath:path animated:YES];
     if (!self.group) {
@@ -163,20 +162,6 @@
 }
 @end
 
-// Deliberately outside CPPrefs* so the component hooks can color this test page.
-@implementation CPDemoController
-- (void)viewDidLoad { [super viewDidLoad]; self.title=@"控件预览"; }
-- (NSInteger)tableView:(UITableView *)t numberOfRowsInSection:(NSInteger)section { return 4; }
-- (UITableViewCell *)tableView:(UITableView *)t cellForRowAtIndexPath:(NSIndexPath *)path {
-    UITableViewCell *cell=[[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:nil];
-    cell.textLabel.text=@[@"主要文字",@"切换开关",@"滑块",@"进度条"][path.row];
-    cell.detailTextLabel.text=path.row==0 ? @"辅助文字 · 点击查看选中背景" : nil;
-    if (path.row==1) { UISwitch *s=[[UISwitch alloc] init]; s.on=YES; cell.accessoryView=s; }
-    if (path.row==2) { UISlider *s=[[UISlider alloc] initWithFrame:CGRectMake(0,0,160,32)]; s.value=0.6; cell.accessoryView=s; }
-    if (path.row==3) { UIProgressView *p=[[UIProgressView alloc] initWithFrame:CGRectMake(0,0,160,12)]; p.progress=0.6; cell.accessoryView=p; }
-    return cell;
-}
-@end
 @interface CPPrefsRootController : PSViewController
 @end
 @implementation CPPrefsRootController
