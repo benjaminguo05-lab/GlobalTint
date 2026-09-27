@@ -1,5 +1,6 @@
 #import <Preferences/PSViewController.h>
 #import <QuartzCore/QuartzCore.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 #import "Config.h"
 #import "AppList.h"
 
@@ -149,7 +150,7 @@
     [self presentViewController:share animated:YES completion:nil];
 }
 - (void)importConfiguration {
-    UIDocumentPickerViewController *picker=[[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.json",@"public.data"] inMode:UIDocumentPickerModeImport];
+    UIDocumentPickerViewController *picker=[[UIDocumentPickerViewController alloc] initForOpeningContentTypes:@[UTTypeJSON,UTTypeData] asCopy:YES];
     picker.delegate=self; picker.allowsMultipleSelection=NO;
     [self presentViewController:picker animated:YES completion:nil];
 }
