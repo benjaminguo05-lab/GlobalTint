@@ -14,6 +14,7 @@ FOUNDATION_EXPORT id CPSourceValue(id object, NSString *property);
 FOUNDATION_EXPORT void CPApplyImageColor(UIImageView *view, UIColor *color);
 FOUNDATION_EXPORT void CPApplySymbolColor(UIImageView *view, UIColor *color);
 FOUNDATION_EXPORT void CPRegisterColorGetter(NSString *className, NSString *selector, NSString *group, NSString *role);
+FOUNDATION_EXPORT void CPRegisterClassColorGetter(NSString *className, NSString *selector, NSString *group, NSString *role);
 FOUNDATION_EXPORT void CPRegisterTabColorGetter(NSString *selector);
 FOUNDATION_EXPORT void CPRegisterStateColorGetter(NSString *className, NSString *selector, NSString *group, NSString *normal, NSString *selected);
 FOUNDATION_EXPORT void CPTransformValue(id object, NSString *property, BOOL enabled, id context, id (^transform)(id source));
@@ -30,4 +31,3 @@ FOUNDATION_EXPORT void CPInstallComponents(void);
 FOUNDATION_EXPORT void CPInstallPrivate(BOOL systemProcess);
 
 FOUNDATION_EXPORT void CPInstallAccent(void);
-

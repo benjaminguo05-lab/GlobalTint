@@ -122,6 +122,20 @@ void CPRegisterColorGetter(NSString *className, NSString *selector, NSString *gr
     });
     MSHookMessageEx(cls,sel,hook,&original); CPRecordCapability(key,YES);
 }
+void CPRegisterClassColorGetter(NSString *className, NSString *selector, NSString *group, NSString *role) {
+    Class cls=NSClassFromString(className), meta=cls ? object_getClass(cls) : Nil; SEL sel=NSSelectorFromString(selector);
+    NSString *key=[NSString stringWithFormat:@"classGetter:%@.%@",className,selector];
+    if ([trackedSetters containsObject:key]) return;
+    if (!meta || !CPObjectMethod(meta,sel,0)) { CPRecordCapability(key,NO); return; }
+    [trackedSetters addObject:key];
+    __block IMP original=NULL;
+    IMP hook=imp_implementationWithBlock(^id(id object) {
+        id source=((id (*)(id,SEL))original)(object,sel);
+        if (!NSThread.isMainThread || [NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.Preferences"]) return source;
+        return CPColor(group,role,nil) ?: source;
+    });
+    MSHookMessageEx(meta,sel,hook,&original); CPRecordCapability(key,YES);
+}
 void CPRegisterTabColorGetter(NSString *selector) {
     CPRegisterStateColorGetter(@"UITabBarButton",selector,@"tabbar",@"normal",@"selected");
 }

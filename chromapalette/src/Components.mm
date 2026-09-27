@@ -133,6 +133,8 @@ static void Tabbar(UITabBar *bar) {
     CPApplyColor(bar,@"tintColor",ItemsColor(@"tabbar",@"selected",bar));
     CPApplyColor(bar,@"unselectedItemTintColor",CPColor(@"tabbar",@"normal",bar));
     BOOL active=CPColor(@"tabbar",@"background",bar) || ItemsColor(@"tabbar",@"selected",bar) || CPColor(@"tabbar",@"normal",bar);
+    UIColor *badge=CPColor(@"badge",@"background",bar);
+    for (UITabBarItem *item in bar.items) CPApplyColor(item,@"badgeColor",badge);
     for (NSString *p in @[@"standardAppearance",@"scrollEdgeAppearance"]) {
         CPTransform(bar,p,active,^id(id source) { return TabAppearance(source,bar); });
         for (UITabBarItem *item in bar.items)
@@ -146,7 +148,7 @@ void CPInstallComponents(void) {
     CPRegisterColorGetter(@"UISwitchModernVisualElement",@"_effectiveTintColor",@"switch",@"off");
     CPInstallAccent();
     CPTrackProperties(@"UINavigationItem",@[@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"]);
-    CPTrackProperties(@"UITabBarItem",@[@"standardAppearance",@"scrollEdgeAppearance"]);
+    CPTrackProperties(@"UITabBarItem",@[@"standardAppearance",@"scrollEdgeAppearance",@"badgeColor"]);
     CPTrackProperties(@"UIBarButtonItem",@[@"tintColor"]);
     CPRegisterView(@"UINavigationBar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"],^(UIView *v) { Navigation((UINavigationBar *)v); });
     CPRegisterView(@"UIToolbar",@[@"tintColor",@"standardAppearance",@"scrollEdgeAppearance",@"compactAppearance",@"compactScrollEdgeAppearance"],^(UIView *v) { Toolbar((UIToolbar *)v); });

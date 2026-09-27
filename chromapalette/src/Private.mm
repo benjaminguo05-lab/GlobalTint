@@ -5,6 +5,20 @@ static void Status(void) {
         CPApplyColor(v,@"fillColor",CPColor(@"status",@"battery",v));
     });
 }
+static void Badge(void) {
+    for (NSString *name in @[@"SBIconBadgeView",@"SBHIconBadgeView"]) {
+        CPRegisterClassColorGetter(name,@"badgeBackgroundColor",@"badge",@"background");
+        CPRegisterView(name,@[@"backgroundColor"],^(UIView *v) {
+            UIColor *color=CPColor(@"badge",@"background",v);
+            CPApplyColor(v,@"backgroundColor",color);
+            for (id background in @[CPGetObject(v,@"backgroundView") ?: NSNull.null,
+                    CPGetIvar(v,"_backgroundView") ?: NSNull.null])
+                if ([background isKindOfClass:UIView.class]) CPApplyColor(background,@"backgroundColor",color);
+        });
+        for (NSString *event in @[@"configureForIcon:",@"updateBadgeBackground",@"_updateBackground"])
+            CPRegisterViewEvent(name,event);
+    }
+}
 static void SelectedBackground(id background, UIColor *color) {
     if (![background isKindOfClass:UIView.class]) return;
     CPApplyColor(background,@"backgroundColor",color);
@@ -60,7 +74,7 @@ void CPInstallPrivate(BOOL systemProcess) {
         });
         CPRegisterViewEvent(@"_SFFluidProgressView",@"_updateProgressBarImage");
     }
-    if (systemProcess) ControlCenter();
+    if (systemProcess) { Badge(); ControlCenter(); }
     else if ([NSBundle.mainBundle.bundleIdentifier isEqual:@"com.apple.MobileSMS"]) {
         for (NSString *selector in @[@"appTintColor",@"darkAppTintColor",@"entryFieldButtonColor",@"entryFieldDarkStyleButtonColor",@"segmentedControlSelectionTintColor"])
             CPRegisterColorGetter(@"CKUITheme",selector,@"accent",@"color");
