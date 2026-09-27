@@ -3,6 +3,7 @@
 #import "../shared/ConfigurationMigration.h"
 #import "../src/BluePolicy.h"
 #import "../src/FilzaArrowPolicy.h"
+#import "../src/ContrastPolicy.h"
 #include <assert.h>
 #include <stdio.h>
 
@@ -20,6 +21,12 @@ static CopyValue *Value(NSInteger number) {
 }
 int main(void) {
     @autoreleasepool {
+        assert(CPStatusInk(1,1,1,1)==0);
+        assert(CPStatusInk(0,0,0,1)==1);
+        assert(CPStatusInk(0.925,0.973,0.949,1)==0);
+        assert(CPStatusInk(0.086,0.173,0.137,1)==1);
+        assert(CPStatusInk(1,1,1,0.5)==-1);
+        assert(CPStatusInk(NAN,0,0,1)==-1);
         for (NSString *name in @[@"arrow_up",@"arrow_down",@"e_return",@"e_expand"]) assert(CPFilzaLiveArrowAsset(name));
         for (id other in @[@"no_sort",@"folder",@"arrow_other",@42,NSNull.null]) assert(!CPFilzaLiveArrowAsset(other));
         assert(!CPFilzaLiveArrowAsset(nil));
