@@ -159,6 +159,9 @@ BOOL CPIsSettingsView(UIView *view) {
     return NO;
 }
 BOOL CPGroupEnabled(NSString *group, UIView *view) {
+    // The preview renders its own explicit light/dark samples, including switches.
+    for (UIResponder *r=view;r;r=r.nextResponder)
+        if ([NSStringFromClass(r.class) isEqual:@"CPPrefsPreview"]) return NO;
     if (![configuration[@"enabled"] boolValue] || ![configuration[@"groups"][group] boolValue]) return NO;
     NSString *bundle=NSBundle.mainBundle.bundleIdentifier ?: @"";
     if ([configuration[@"excludedApps"] containsObject:bundle]) return NO;
@@ -174,9 +177,9 @@ UIColor *CPColor(NSString *group, NSString *role, UIView *view) {
     // CC modules can force dark local traits even while the phone is in light mode.
     // Select the user's system palette, rather than that module's material style.
     NSInteger style=traits.userInterfaceStyle;
-    BOOL filzaBar=[NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"] &&
-        ([@[@"navigation",@"toolbar",@"tabbar",@"accent"] containsObject:group]);
-    if ([group isEqual:@"controlcenter"] || filzaBar) {
+    BOOL systemBar=[@[@"navigation",@"toolbar",@"tabbar"] containsObject:group];
+    BOOL filzaAccent=[NSBundle.mainBundle.bundleIdentifier.lowercaseString hasPrefix:@"com.tigisoftware.filza"] && [group isEqual:@"accent"];
+    if ([group isEqual:@"controlcenter"] || systemBar || filzaAccent) {
         NSInteger screenStyle=UIScreen.mainScreen.traitCollection.userInterfaceStyle;
         if (screenStyle!=UIUserInterfaceStyleUnspecified) style=screenStyle;
     }
