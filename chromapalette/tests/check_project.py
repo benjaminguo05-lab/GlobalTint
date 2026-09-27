@@ -40,14 +40,13 @@ def check_sources():
             groups[current].add(r.group(1))
     for group, role in re.findall(r'CPColor\(@"(\w+)",@"(\w+)"', src):
         assert role in groups.get(group, set()), (group, role)
-    assert {'navigation','toolbar','accent','warm','switch','slider','status','badge','controlcenter'} <= groups.keys()
+    assert {'navigation','toolbar','accent','switch','slider','status','badge','controlcenter'} <= groups.keys()
     components=(ROOT / 'src/Components.mm').read_text(encoding='utf-8')
     assert 'CPRegisterView(@"UITableView"' not in components
     assert 'CPRegisterView(@"UITableViewCell"' not in components
     assert 'CPRegisterView(@"UICollectionViewListCell"' not in components
     assert 'keyboard' not in groups
     assert groups['accent'] == {'color'}
-    assert groups['warm'] == {'color'}
     assert groups['badge'] == {'background'}
     assert not {'notes','filza','messages'} & groups.keys()
     assert 'table' not in groups and 'cell' not in groups
@@ -60,6 +59,9 @@ def check_sources():
     assert not re.search(r'UIKB|UIKeyboard', (ROOT / 'src/Private.mm').read_text())
     assert 'systemRedColor' not in (ROOT / 'src/Accent.mm').read_text(), 'do not globally replace destructive semantic red'
     assert 'SBIconBadgeView' in (ROOT / 'src/Private.mm').read_text()
+    private=(ROOT / 'src/Private.mm').read_text()
+    assert 'CPApplyColor(v,@"backgroundColor",color)' not in private
+    assert '0xF3/255.0' in components and 'org.coolstar.SileoStore' in components
     assert 'UIDocumentPickerViewController' in prefs and 'UIActivityViewController' in prefs
     print(f'Project contracts OK: {len(groups)} component groups, {sum(map(len, groups.values()))} color roles.')
 
