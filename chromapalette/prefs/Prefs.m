@@ -5,7 +5,7 @@
 
 #import "Preview.h"
 
-@interface CPPrefsTable : UITableViewController <UIColorPickerViewControllerDelegate>
+@interface CPPrefsTable : UITableViewController <UIColorPickerViewControllerDelegate, UIDocumentPickerDelegate>
 @property(nonatomic,strong) NSMutableDictionary *configuration;
 @property(nonatomic,strong) NSDictionary *group;
 @property(nonatomic,copy) NSString *editingRole;
@@ -40,7 +40,7 @@
 }
 - (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
     if (self.group) return section==0 ? 1 : ([self unifiedAccent] ? 2 : 3);
-    return section==0 ? 2 : section==1 ? CPGroups().count : 4;
+    return section==0 ? 2 : section==1 ? CPGroups().count : 6;
 }
 - (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
     if (self.group) return section==0 ? @"组件开关" : self.group[@"roles"][section-1][@"title"];
@@ -79,7 +79,7 @@
                 [NSString stringWithFormat:@"已开启 · %lu/%lu 项颜色已启用",(unsigned long)enabled,(unsigned long)[g[@"roles"] count]] : @"已关闭 · 点击设置颜色";
             cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
         } else {
-            cell.textLabel.text=@[@"不改色的应用",@"控件预览",@"关闭并恢复默认设置",@"配置读取诊断"][path.row];
+            cell.textLabel.text=@[@"不改色的应用",@"控件预览",@"导出配置",@"导入配置",@"关闭并恢复默认设置",@"配置读取诊断"][path.row];
             cell.accessoryType=UITableViewCellAccessoryDisclosureIndicator;
         }
     } else if (path.section==0) {
@@ -129,9 +129,51 @@
     [a addAction:[UIAlertAction actionWithTitle:@"恢复" style:UIAlertActionStyleDestructive handler:^(UIAlertAction *action) { self.configuration=[CPDefaults() mutableCopy]; [self save]; [self.tableView reloadData]; }]];
     [self presentViewController:a animated:YES completion:nil];
 }
+- (void)showTitle:(NSString *)title message:(NSString *)message {
+    UIAlertController *a=[UIAlertController alertControllerWithTitle:title message:message preferredStyle:UIAlertControllerStyleAlert];
+    [a addAction:[UIAlertAction actionWithTitle:@"好" style:UIAlertActionStyleDefault handler:nil]];
+    [self presentViewController:a animated:YES completion:nil];
+}
+- (void)exportConfiguration {
+    NSDictionary *payload=@{@"format":@"com.benja.chromapalette.configuration",@"version":@1,
+        @"configuration":CPNormalizeConfiguration(self.configuration)};
+    NSError *error=nil;
+    NSData *data=[NSJSONSerialization dataWithJSONObject:payload options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:&error];
+    NSURL *url=[NSURL fileURLWithPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"iOS全局改色-配置.json"]];
+    if (!data || ![data writeToURL:url options:NSDataWritingAtomic error:&error]) {
+        [self showTitle:@"导出失败" message:error.localizedDescription ?: @"无法生成配置文件。"]; return;
+    }
+    UIActivityViewController *share=[[UIActivityViewController alloc] initWithActivityItems:@[url] applicationActivities:nil];
+    share.popoverPresentationController.sourceView=self.view;
+    share.popoverPresentationController.sourceRect=CGRectMake(CGRectGetMidX(self.view.bounds),CGRectGetMidY(self.view.bounds),1,1);
+    [self presentViewController:share animated:YES completion:nil];
+}
+- (void)importConfiguration {
+    UIDocumentPickerViewController *picker=[[UIDocumentPickerViewController alloc] initWithDocumentTypes:@[@"public.json",@"public.data"] inMode:UIDocumentPickerModeImport];
+    picker.delegate=self; picker.allowsMultipleSelection=NO;
+    [self presentViewController:picker animated:YES completion:nil];
+}
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    NSURL *url=urls.firstObject; if (!url) return;
+    NSNumber *size=nil; [url getResourceValue:&size forKey:NSURLFileSizeKey error:nil];
+    if (size.unsignedLongLongValue>1024*1024) { [self showTitle:@"导入失败" message:@"配置文件不能超过 1 MB。"]; return; }
+    BOOL access=[url startAccessingSecurityScopedResource]; NSError *error=nil;
+    NSData *data=[NSData dataWithContentsOfURL:url options:0 error:&error];
+    if (access) [url stopAccessingSecurityScopedResource];
+    id root=data ? [NSJSONSerialization JSONObjectWithData:data options:0 error:&error] : nil;
+    NSDictionary *candidate=[root isKindOfClass:NSDictionary.class] ? (root[@"configuration"] ?: root) : nil;
+    if (![candidate isKindOfClass:NSDictionary.class] || ![candidate[@"groups"] isKindOfClass:NSDictionary.class] ||
+        ![candidate[@"roles"] isKindOfClass:NSDictionary.class]) {
+        [self showTitle:@"导入失败" message:error.localizedDescription ?: @"这不是有效的 iOS全局改色 配置文件。"]; return;
+    }
+    NSDictionary *normalized=CPNormalizeConfiguration(candidate);
+    if (!CPWriteConfiguration(normalized)) { [self showTitle:@"导入失败" message:@"配置无法写入，请确认设置 App 已开启插件注入。"]; return; }
+    self.configuration=[normalized mutableCopy]; [self.tableView reloadData];
+    [self showTitle:@"导入完成" message:@"配置已应用。已打开的 App 可能需要重新打开，以刷新缓存的颜色和图像。"]; 
+}
 - (void)diagnostics {
     NSDictionary *disk=CPReadConfiguration();
-    NSString *message=[NSString stringWithFormat:@"版本：0.1.9\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
+    NSString *message=[NSString stringWithFormat:@"版本：0.1.10\nlibSandy 返回值：%d\n总开关：%@\n系统界面：%@\n颜色项：%lu\n\n这仅检查设置进程读到的配置。其他进程的注入与私有接口命中，需要查看 ChromaPalette 日志并真机测试。",CPPreparePreferences(),[disk[@"enabled"] boolValue]?@"开":@"关",[disk[@"systemEnabled"] boolValue]?@"开":@"关",(unsigned long)[disk[@"roles"] count]];
     NSDictionary *status=CPIcleanerStatus();
     if (status) {
         NSDateFormatter *format=[[NSDateFormatter alloc] init]; format.dateStyle=NSDateFormatterShortStyle; format.timeStyle=NSDateFormatterMediumStyle;
@@ -149,8 +191,10 @@
         else if (path.section==2) {
             if (path.row==0) [self editExclusions];
             if (path.row==1) [self preview];
-            if (path.row==2) [self reset];
-            if (path.row==3) [self diagnostics];
+            if (path.row==2) [self exportConfiguration];
+            if (path.row==3) [self importConfiguration];
+            if (path.row==4) [self reset];
+            if (path.row==5) [self diagnostics];
         }
         return;
     }

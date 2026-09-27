@@ -25,7 +25,9 @@
 }
 - (UIColor *)color:(NSString *)group role:(NSString *)role fallback:(UIColor *)fallback {
     NSDictionary *config=self.configuration;
-    BOOL experimental=[group isEqual:@"status"] || [group isEqual:@"controlcenter"];
+    BOOL experimental=NO;
+    for (NSDictionary *definition in CPGroups())
+        if ([definition[@"key"] isEqual:group]) { experimental=[definition[@"experimental"] boolValue]; break; }
     NSDictionary *r=config[@"roles"][[NSString stringWithFormat:@"%@.%@",group,role]];
     if (![config[@"enabled"] boolValue] || ![config[@"groups"][group] boolValue] || ![r[@"enabled"] boolValue] ||
         (experimental && ![config[@"systemEnabled"] boolValue])) return fallback;
@@ -41,12 +43,15 @@
     NSString *key=CPGroups()[section][@"key"];
     if ([key isEqual:@"status"] || [key isEqual:@"controlcenter"])
         return @"配色示意，非真实系统控件。实际效果请查看状态栏或控制中心。";
+    if ([key isEqual:@"badge"]) return @"配色示意。桌面图标角标需要启用系统界面；应用内标签栏角标不需要。";
     if ([key isEqual:@"accent"]) return @"点击按钮可测试响应。导航栏、工具栏、标签栏选中项和进度填充优先使用通用强调色。";
     if ([key isEqual:@"switch"]) return @"可切换开启／关闭。滑钮保留系统外观。";
     return @"按当前开关与颜色预览；关闭的颜色项显示系统默认效果。上方可切换浅色／深色。";
 }
 - (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)path {
-    return [@[@190,@90,@150,@120,@90,@100,@80,@110,@130][path.section] doubleValue];
+    NSString *key=CPGroups()[path.section][@"key"];
+    return [@{@"navigation":@190,@"toolbar":@90,@"accent":@150,@"warm":@120,@"switch":@120,
+        @"slider":@90,@"tabbar":@100,@"progress":@80,@"status":@110,@"badge":@110,@"controlcenter":@130}[key] doubleValue];
 }
 - (void)buttonTapped:(UIButton *)button {
     BOOL selected=!button.selected; button.selected=selected;
@@ -87,6 +92,17 @@
         UILabel *link=[[UILabel alloc] initWithFrame:CGRectMake(16,52,width-32,30)];
         link.attributedText=[[NSAttributedString alloc] initWithString:@"链接文字与下划线示例" attributes:@{NSForegroundColorAttributeName:color,NSUnderlineStyleAttributeName:@1}];
         [sample addSubview:link];
+    } else if ([key isEqual:@"warm"]) {
+        UIColor *color=[self color:key role:@"color" fallback:UIColor.systemOrangeColor];
+        for (NSInteger i=0;i<3;i++) {
+            UIButton *button=[UIButton buttonWithType:UIButtonTypeSystem]; button.userInteractionEnabled=NO;
+            button.frame=CGRectMake(16+i*68,6,56,56); button.layer.cornerRadius=28; button.backgroundColor=color;
+            [button setTitle:@[@"÷",@"×",@"+"][i] forState:UIControlStateNormal]; [button setTitleColor:UIColor.whiteColor forState:UIControlStateNormal];
+            button.titleLabel.font=[UIFont systemFontOfSize:28 weight:UIFontWeightMedium]; [sample addSubview:button];
+        }
+        UIImageView *folder=[[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"folder.fill"]];
+        folder.frame=CGRectMake(width-62,12,44,38); folder.tintColor=color; [sample addSubview:folder];
+        UILabel *label=[[UILabel alloc] initWithFrame:CGRectMake(16,68,width-32,24)]; label.text=@"计算器运算键与备忘录文件夹"; label.font=[UIFont systemFontOfSize:13]; [sample addSubview:label];
     } else if ([key isEqual:@"switch"]) {
         for (NSInteger i=0;i<2;i++) {
             UILabel *label=[[UILabel alloc] initWithFrame:CGRectMake(16,i*44,width-100,34)]; label.text=i ? @"关闭轨道" : @"开启轨道"; [sample addSubview:label];
@@ -125,6 +141,13 @@
         UIView *fill=[[UIView alloc] initWithFrame:CGRectMake(4,4,58,30)]; fill.layer.cornerRadius=4;
         fill.backgroundColor=[self color:key role:@"battery" fallback:UIColor.systemGreenColor]; [battery addSubview:fill]; [sample addSubview:battery];
         UILabel *label=[[UILabel alloc] initWithFrame:CGRectMake(120,14,width-130,38)]; label.text=@"70% · 电池填充示意"; label.font=[UIFont systemFontOfSize:13]; [sample addSubview:label];
+    } else if ([key isEqual:@"badge"]) {
+        UIView *icon=[[UIView alloc] initWithFrame:CGRectMake(18,8,64,64)]; icon.layer.cornerRadius=14; icon.backgroundColor=UIColor.systemGray4Color;
+        UIImageView *bell=[[UIImageView alloc] initWithImage:[UIImage systemImageNamed:@"bell.fill"]]; bell.frame=CGRectMake(17,17,30,30); bell.tintColor=UIColor.whiteColor; [icon addSubview:bell];
+        UILabel *badge=[[UILabel alloc] initWithFrame:CGRectMake(48,-7,30,30)]; badge.layer.cornerRadius=15; badge.clipsToBounds=YES;
+        badge.backgroundColor=[self color:key role:@"background" fallback:UIColor.systemRedColor]; badge.text=@"3"; badge.textColor=UIColor.whiteColor;
+        badge.textAlignment=NSTextAlignmentCenter; badge.font=[UIFont boldSystemFontOfSize:15]; [icon addSubview:badge]; [sample addSubview:icon];
+        UILabel *label=[[UILabel alloc] initWithFrame:CGRectMake(102,12,width-114,56)]; label.numberOfLines=2; label.text=@"桌面图标／标签栏角标\n警告与删除颜色保持原样"; label.font=[UIFont systemFontOfSize:13]; [sample addSubview:label];
     } else if ([key isEqual:@"controlcenter"]) {
         UIButton *circle=[UIButton buttonWithType:UIButtonTypeCustom]; circle.frame=CGRectMake(16,8,60,60); circle.layer.cornerRadius=30;
         circle.backgroundColor=[self color:key role:@"active" fallback:UIColor.systemBlueColor];
