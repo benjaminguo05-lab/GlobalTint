@@ -62,12 +62,6 @@ static UIColor *MappedSemantic(UIColor *source, UIView *view) {
     }
     return source;
 }
-static NSAttributedString *Attributed(NSAttributedString *source, UIColor *color, UIView *view) {
-    if (!color) return source;
-    return CPMapAttributedColors(source,@[NSForegroundColorAttributeName,NSUnderlineColorAttributeName],^id(id value) {
-        return Mapped(value,color,view);
-    });
-}
 static void AccentProperty(id object, NSString *property, UIColor *color, UIView *view) {
     if (!object) return;
     static char accentPropertiesKey;
